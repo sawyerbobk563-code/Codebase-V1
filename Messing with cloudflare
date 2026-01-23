@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SwiftChat - Anonymous</title>
+    <style>
+        body { font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px; }
+        #chat { height: 300px; border: 1px solid #ccc; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
+        .msg { margin-bottom: 8px; }
+        .user { font-weight: bold; color: #0070f3; }
+    </style>
+</head>
+<body>
+    <h2>SwiftChat</h2>
+    <div id="chat"></div>
+    <input id="userInput" placeholder="Nickname" type="text" size="10">
+    <input id="textInput" placeholder="Type a message..." type="text">
+    <button onclick="send()">Send</button>
+
+    <script>
+        const WORKER_URL = "https://swiftchat.sawyerbobk563.workers.dev/"; // Replace after deployment
+        const room = "general";
+
+        async function load() {
+            const res = await fetch(`${WORKER_URL}?room=${room}`);
+            const data = await res.json();
+            const chat = document.getElementById('chat');
+            chat.innerHTML = data.map(m => `<div class="msg"><span class="user">${m.user}:</span> ${m.text}</div>`).join('');
+        }
+
+        async function send() {
+            const user = document.getElementById('userInput').value || "Anon";
+            const text = document.getElementById('textInput').value;
+            await fetch(`${WORKER_URL}?room=${room}`, {
+                method: 'POST',
+                body: JSON.stringify({ user, text })
+            });
+            document.getElementById('textInput').value = '';
+            load();
+        }
+
+        setInterval(load, 2000); // Poll every 2 seconds
+        load();
+    </script>
+</body>
+</html>
