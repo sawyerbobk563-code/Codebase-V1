@@ -5,4 +5,4 @@ google sign in example: https://dotnotblock.edgeone.app/
 MHSapp example: https://sawyerbobk563-code.github.io/MHSapps/  
 messing platform example: https://sends.edgeone.app/
 <br>
-text
+the ai chat bot example: https://notamai.edgeone.app/  
