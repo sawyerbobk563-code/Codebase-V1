@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SwiftChat - Secure & Anonymous</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- CryptoJS for encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <!-- PWA Manifest with Updated Icon -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlN3aWZ0Q2hhdCIsCiAgInNob3J0X25hbWUiOiAiU3dpZnRDaGF0IiwKICAiZGVzY3JpcHRpb24iOiAiU2VjdXJlICYgQW5vbnltb3VzIFJlYWwtdGltZSBDaGF0IiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMTExMTEiLAogICJ0aGVtZV9jb2xvciI6ICIjMDA3MGYzIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9jZG4uanNkZWxpdnIubmV0L2doL2Zhdmljb25raXQvZW1vamkvNDAzL3BhY2tlci9uZXV0cmFsLzI1Ni9zcGVlY2hfYmFsbG9vbi5wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIsCiAgICAgICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9jZG4uanNkZWxpdnIubmV0L2doL2Zhdmljb25raXQvZW1vamkvNDAzL3BhY2tlci9uZXV0cmFsLzUxMi9zcGVlY2hfYmFsbG9vbi5wbmciLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIsCiAgICAgICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSIKICAgIH0KICBdCn0=">
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/faviconkit/emoji/403/packer/neutral/256/speech_balloon.png">
+    
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s ease; }
+        .chat-container { height: calc(100vh - 180px); margin-bottom: 100px; }
+        .message-bubble { max-width: 85%; transition: transform 0.1s; user-select: none; -webkit-touch-callout: none; }
+        .message-bubble:active { transform: scale(0.98); }
+        .emoji-panel { 
+            display: none; 
+            position: fixed;
+            bottom: 120px;
+            right: 20px;
+            width: 300px;
+            height: 350px;
+            max-height: 350px;
+            overflow-y: auto;
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            z-index: 1000;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-radius: 16px;
+        }
+        .emoji-panel.active { 
+            display: block; 
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+        .context-menu { display: none; position: fixed; z-index: 100; }
+        .context-menu.active { display: block; }
+        
+        /* Emoji spacing fix */
+        .emoji { display: inline-block; margin: 0 1px; vertical-align: middle; }
+        .message-text { word-break: break-word; }
+        
+        /* PWA Install Prompt */
+        .pwa-install-prompt {
+            position: fixed;
+            bottom: 120px;
+            right: 20px;
+            z-index: 2000;
+            animation: slideIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .rate-limit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: bold;
+            backdrop-filter: blur(2px);
+        }
+        
+        .encryption-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            font-size: 10px;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 1px 4px;
+            border-radius: 4px;
+            margin-left: 4px;
+        }
+        
+        .emoji-category-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+            transition: all 0.2s;
+            white-space: nowrap;
+            font-weight: 500;
+        }
+        
+        .emoji-category-btn.active {
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+        }
+        
+        /* Toast notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .toast {
+            padding: 14px 18px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            animation: toastSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-width: 320px;
+            border-left: 4px solid #3b82f6;
+            backdrop-filter: blur(10px);
+        }
+        
+        .toast.dark {
+            background: rgba(30, 41, 59, 0.95);
+            color: white;
+        }
+        
+        .toast.success {
+            border-left-color: #10b981;
+        }
+        
+        .toast.info {
+            border-left-color: #3b82f6;
+        }
+        
+        .toast.warning {
+            border-left-color: #f59e0b;
+        }
+        
+        .toast.error {
+            border-left-color: #ef4444;
+        }
+        
+        /* Fixed message input area */
+        .fixed-input-area {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(to top, rgba(255, 255, 255, 1), rgba(255, 255, 255, 0.95));
+            backdrop-filter: blur(10px);
+            border-top: 1px solid #e2e8f0;
+            padding: 16px;
+            z-index: 100;
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+        }
+        
+        .fixed-input-area.dark {
+            background: linear-gradient(to top, rgba(15, 23, 42, 1), rgba(15, 23, 42, 0.95));
+            border-top: 1px solid #334155;
+        }
+        
+        /* Reaction styling */
+        .reaction-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 6px;
+        }
+        
+        .reaction-badge {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 2px 8px;
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .reaction-badge:hover {
+            transform: scale(1.05);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .reaction-badge.dark {
+            background: rgba(30, 41, 59, 0.9);
+            border-color: #475569;
+            color: white;
+        }
+        
+        .reaction-count {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+        }
+        
+        .reaction-count.dark {
+            color: #cbd5e1;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%) translateY(20px); opacity: 0; }
+            to { transform: translateX(0) translateY(0); opacity: 1; }
+        }
+        
+        @keyframes toastSlideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes toastSlideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
+        
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); opacity: 1; }
+            70% { transform: scale(0.95); }
+            100% { transform: scale(1); }
+        }
+        
+        /* Scrollbar styling for emoji panel */
+        .emoji-panel::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .emoji-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        
+        .emoji-panel::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 4px;
+        }
+        
+        .emoji-panel.dark::-webkit-scrollbar-track {
+            background: #2d3748;
+        }
+        
+        .emoji-panel.dark::-webkit-scrollbar-thumb {
+            background: #4a5568;
+        }
+        
+        /* Timestamp styling */
+        .message-timestamp {
+            font-size: 11px;
+            color: #64748b;
+            margin-top: 4px;
+            text-align: right;
+        }
+        
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            max-width: 100%;
+            margin-bottom: 16px;
+        }
+        
+        /* Loading animation */
+        .loading-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+        
+        .loading-dots span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #3b82f6;
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+        
+        .loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+        
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+        
+        /* First time visitor overlay */
+        .first-time-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            animation: fadeIn 0.5s ease;
+        }
+        
+        .first-time-card {
+            background: white;
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 400px;
+            margin: 20px;
+            animation: scaleIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        
+        .first-time-card.dark {
+            background: #1e293b;
+            color: white;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        @keyframes scaleIn {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        
+        /* Message sending animation */
+        .sending-message {
+            opacity: 0.7;
+            filter: grayscale(0.2);
+        }
+        
+        /* Debug info panel */
+        .debug-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: monospace;
+            max-width: 300px;
+            max-height: 200px;
+            overflow: auto;
+            z-index: 999;
+            display: none;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Debug Panel (hidden by default) -->
+    <div id="debug-panel" class="debug-panel"></div>
+
+    <!-- First Time Visitor Overlay -->
+    <div id="first-time-overlay" class="first-time-overlay hidden">
+        <div class="first-time-card">
+            <div class="text-center">
+                <div class="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                    <i data-lucide="zap" class="w-10 h-10 text-white"></i>
+                </div>
+                <h2 class="text-2xl font-bold mb-3">Welcome to SwiftChat! ✨</h2>
+                <p class="text-slate-600 dark:text-slate-300 mb-6">
+                    Send encrypted messages, react with emojis, and enjoy secure chatting. 
+                    You can install this as an app for offline use!
+                </p>
+                <div class="space-y-3">
+                    <button onclick="dismissFirstTime()" class="w-full py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-500 transition-colors">
+                        Get Started
+                    </button>
+                    <button onclick="showPWAInstallPrompt()" class="w-full py-3 border border-blue-600 text-blue-600 dark:text-blue-400 rounded-xl font-medium hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                        Install App
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PWA Install Prompt -->
+    <div id="pwa-prompt" class="pwa-install-prompt hidden">
+        <div class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-2xl shadow-2xl p-6 max-w-xs">
+            <div class="flex items-center gap-4 mb-4">
+                <div class="w-14 h-14 bg-blue-600 rounded-xl flex items-center justify-center">
+                    <i data-lucide="zap" class="w-8 h-8 text-white"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white text-lg">Install SwiftChat</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Use offline like a native app</p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="dismissPWA()" class="flex-1 py-3 px-4 text-sm border border-slate-300 dark:border-slate-600 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Not Now</button>
+                <button onclick="installPWA()" class="flex-1 py-3 px-4 text-sm bg-gradient-to-r from-blue-600 to-blue-500 text-white rounded-xl hover:from-blue-500 hover:to-blue-400 transition-all shadow-lg">Install</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu Overlay -->
+    <div id="context-menu" class="context-menu bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2 min-w-[140px] animate-in fade-in zoom-in duration-100">
+        <div id="reaction-tools" class="flex gap-2 p-2 border-b border-slate-100 dark:border-slate-700 mb-1">
+            <button onclick="addReaction('❤️')" class="hover:scale-125 transition-transform text-lg">❤️</button>
+            <button onclick="addReaction('😂')" class="hover:scale-125 transition-transform text-lg">😂</button>
+            <button onclick="addReaction('😮')" class="hover:scale-125 transition-transform text-lg">😮</button>
+            <button onclick="addReaction('🔥')" class="hover:scale-125 transition-transform text-lg">🔥</button>
+            <button onclick="addReaction('👍')" class="hover:scale-125 transition-transform text-lg">👍</button>
+        </div>
+        <button id="delete-btn" onclick="deleteMessage()" class="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center gap-2">
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Message
+        </button>
+    </div>
+
+    <header class="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 backdrop-blur-md z-50">
+        <div class="flex justify-between items-center mb-2">
+            <div class="flex items-center gap-2">
+                <div class="bg-gradient-to-r from-blue-600 to-blue-500 p-1.5 rounded-lg shadow-lg">
+                    <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+                </div>
+                <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">SwiftChat</h1>
+                <span class="encryption-indicator">
+                    <i data-lucide="lock" class="w-3 h-3"></i>
+                    <span>Encrypted</span>
+                </span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button onclick="toggleDebugPanel()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Debug">
+                    <i data-lucide="bug" class="w-5 h-5"></i>
+                </button>
+                <button onclick="refreshWebsite()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Refresh">
+                    <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                </button>
+                <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
+                    <i id="theme-icon" data-lucide="moon" class="w-5 h-5"></i>
+                </button>
+                <div class="flex items-center gap-2 text-xs text-slate-500 border-l border-slate-200 dark:border-slate-800 pl-3">
+                    <span id="status-dot" class="w-2 h-2 rounded-full bg-green-500"></span>
+                </div>
+            </div>
+        </div>
+        <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-200 dark:bg-slate-800/50 rounded-lg w-fit border border-slate-300 dark:border-slate-700/50">
+            <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-500"></i>
+            <span id="ip-display" class="text-xs font-mono text-blue-600 dark:text-blue-300">Fetching IP...</span>
+        </div>
+    </header>
+
+    <main id="chat" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container pb-32"></main>
+
+    <!-- Fixed Input Area -->
+    <div id="fixed-input-area" class="fixed-input-area">
+        <div class="max-w-4xl mx-auto space-y-3">
+            <div class="flex gap-2 relative">
+                <input id="userInput" type="text" placeholder="Alias" class="w-24 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl py-3 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+                <div class="relative flex-grow">
+                    <input id="textInput" type="text" placeholder="Type your encrypted message..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all" onkeypress="handleKeyPress(event)">
+                    <div id="rate-limit-overlay" class="rate-limit-overlay hidden">
+                        <div class="text-center">
+                            <div class="text-lg">⏳</div>
+                            <div class="text-xs mt-1">Wait 3s</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="relative">
+                    <button onclick="toggleEmojis()" id="emoji-btn" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 p-3 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                        <i data-lucide="smile" class="w-5 h-5"></i>
+                    </button>
+                    <div id="emoji-panel" class="emoji-panel bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                        <!-- Categories will be populated by JavaScript -->
+                    </div>
+                </div>
+                <button onclick="send()" id="send-btn" class="bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white px-6 rounded-xl flex items-center justify-center shadow-lg hover:shadow-xl transition-all">
+                    <i data-lucide="send" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // FIXED: Using the correct worker URL that accepts messages
+        const WORKER_URL = "https://swiftchat.sawyerbobk563.workers.dev/";
+        const room = "general";
+        let lastMessageCount = 0;
+        let selectedMessageId = null;
+        let longPressTimer;
+        let deferredPrompt = null;
+        let lastSentTime = 0;
+        const MESSAGE_COOLDOWN = 3000; // 3 seconds in milliseconds
+        
+        // Encryption settings
+        const ENCRYPTION_ENABLED = true;
+        let encryptionKey = null;
+        const ENCRYPTION_KEY_STORAGE = "swiftchat_encryption_key";
+        
+        // Emoji categories
+        const emojiCategories = {
+            "Smileys": ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🫠','🫢','🫣','🤪','😲','🥺','🥹'],
+            "Gestures": ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','🫵','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','👐','🤲','🤝','🙏'],
+            "Hearts": ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟'],
+            "Objects": ['💡','📱','💻','⌨️','🖥️','🖨️','🖱️','🖲️','🎧','🎤','🎮','🕹️','📷','🎥','📽️','🎞️','📞','☎️','📟','📠','📺','📻','🎙️','🎚️','🎛️','🧭'],
+            "Symbols": ['🔣','➕','➖','➗','✖️','💲','💱','™️','©️','®️','〰️','➰','➿','🔚','🔙','🔛','🔝','🔜'],
+            "Nature": ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪰','🪲','🪳','🦟','🦗','🕷️','🕸️','🦂'],
+            "Food": ['🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🫘','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕'],
+            "Travel": ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🦯','🦽','🦼','🛴','🚲','🛵','🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢']
+        };
+
+        function initIcons() { lucide.createIcons(); }
+        initIcons();
+
+        // Debug logging
+        function debugLog(message) {
+            const debugPanel = document.getElementById('debug-panel');
+            debugPanel.innerHTML = `<div>${new Date().toLocaleTimeString()}: ${message}</div>` + debugPanel.innerHTML;
+            console.log(message);
+        }
+
+        function toggleDebugPanel() {
+            const panel = document.getElementById('debug-panel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Toast notification system
+        function showToast(message, type = 'info', duration = 3000) {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = 'toast-' + Date.now();
+            
+            const toast = document.createElement('div');
+            toast.id = toastId;
+            toast.className = `toast ${type} ${document.documentElement.classList.contains('dark') ? 'dark' : ''}`;
+            
+            // Set icon based on type
+            let icon = 'info';
+            if (type === 'success') icon = 'check-circle';
+            else if (type === 'warning') icon = 'alert-circle';
+            else if (type === 'error') icon = 'x-circle';
+            
+            toast.innerHTML = `
+                <i data-lucide="${icon}" class="w-5 h-5"></i>
+                <span class="flex-1">${message}</span>
+                <button onclick="dismissToast('${toastId}')" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            `;
+            
+            toastContainer.appendChild(toast);
+            initIcons(); // Reinitialize icons for the new toast
+            
+            // Auto remove after duration
+            const timeout = setTimeout(() => {
+                dismissToast(toastId);
+            }, duration);
+            
+            // Store timeout reference
+            toast.dataset.timeout = timeout;
+            
+            return toastId;
+        }
+
+        function dismissToast(toastId) {
+            const toast = document.getElementById(toastId);
+            if (toast) {
+                clearTimeout(toast.dataset.timeout);
+                toast.style.animation = 'toastSlideOut 0.3s ease-out forwards';
+                setTimeout(() => toast.remove(), 300);
+            }
+        }
+
+        // Initialize Emoji Picker with improved functionality
+        function initEmojiPicker() {
+            const emojiPanel = document.getElementById('emoji-panel');
+            emojiPanel.innerHTML = '';
+            
+            // Create category buttons
+            const categoryContainer = document.createElement('div');
+            categoryContainer.className = 'sticky top-0 z-10 flex gap-1 p-3 border-b border-slate-200 dark:border-slate-700 overflow-x-auto bg-white dark:bg-slate-800';
+            
+            Object.keys(emojiCategories).forEach((category, index) => {
+                const btn = document.createElement('button');
+                btn.className = `emoji-category-btn ${index === 0 ? 'active' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`;
+                btn.textContent = category;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    showEmojiCategory(category, btn);
+                };
+                categoryContainer.appendChild(btn);
+            });
+            
+            emojiPanel.appendChild(categoryContainer);
+            
+            // Create emoji grid container
+            const emojiGrid = document.createElement('div');
+            emojiGrid.id = 'emoji-grid';
+            emojiGrid.className = 'grid grid-cols-9 gap-1 p-3';
+            emojiPanel.appendChild(emojiGrid);
+            
+            // Show first category by default
+            showEmojiCategory(Object.keys(emojiCategories)[0]);
+            
+            // Close emoji panel when clicking outside
+            document.addEventListener('click', (e) => {
+                const emojiPanel = document.getElementById('emoji-panel');
+                const emojiBtn = document.getElementById('emoji-btn');
+                
+                if (!emojiPanel.contains(e.target) && !emojiBtn.contains(e.target) && emojiPanel.classList.contains('active')) {
+                    toggleEmojis();
+                }
+            });
+        }
+
+        function showEmojiCategory(category, button = null) {
+            // Update active button
+            document.querySelectorAll('.emoji-category-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('bg-slate-100', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-300');
+            });
+            
+            if (button) {
+                button.classList.add('active');
+                button.classList.remove('bg-slate-100', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-300');
+            }
+            
+            // Show emojis for category
+            const emojiGrid = document.getElementById('emoji-grid');
+            emojiGrid.innerHTML = '';
+            
+            emojiCategories[category].forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.className = "hover:bg-slate-200 dark:hover:bg-slate-700 p-2 rounded-xl text-xl transition-all flex items-center justify-center emoji hover:scale-110 active:scale-95";
+                btn.textContent = emoji;
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    document.getElementById('textInput').value += emoji;
+                    document.getElementById('textInput').focus();
+                    toggleEmojis();
+                };
+                emojiGrid.appendChild(btn);
+            });
+        }
+
+        function toggleEmojis() {
+            const emojiPanel = document.getElementById('emoji-panel');
+            const isActive = emojiPanel.classList.contains('active');
+            
+            // Close PWA prompt if open
+            document.getElementById('pwa-prompt').classList.add('hidden');
+            
+            // Toggle current panel
+            emojiPanel.classList.toggle('active');
+            
+            // Update panel theme class
+            if (document.documentElement.classList.contains('dark')) {
+                emojiPanel.classList.add('dark');
+                emojiPanel.classList.remove('light');
+            } else {
+                emojiPanel.classList.add('light');
+                emojiPanel.classList.remove('dark');
+            }
+            
+            // Position the panel above the emoji button
+            const emojiBtn = document.getElementById('emoji-btn');
+            const btnRect = emojiBtn.getBoundingClientRect();
+            
+            // If opening, set position
+            if (!isActive) {
+                emojiPanel.style.bottom = `${window.innerHeight - btnRect.top + 10}px`;
+                emojiPanel.style.right = `${window.innerWidth - btnRect.right}px`;
+            }
+        }
+
+        // Encryption Functions
+        function initEncryption() {
+            if (!ENCRYPTION_ENABLED) return;
+            
+            // Try to load existing key or generate new one
+            const storedKey = localStorage.getItem(ENCRYPTION_KEY_STORAGE);
+            if (storedKey) {
+                encryptionKey = storedKey;
+            } else {
+                // Generate a new encryption key
+                encryptionKey = generateEncryptionKey();
+                localStorage.setItem(ENCRYPTION_KEY_STORAGE, encryptionKey);
+            }
+            
+            debugLog('Encryption initialized');
+        }
+
+        function generateEncryptionKey() {
+            // Generate a random 32-character key
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+            let key = '';
+            for (let i = 0; i < 32; i++) {
+                key += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return key;
+        }
+
+        function encryptMessage(text) {
+            if (!ENCRYPTION_ENABLED || !encryptionKey) return text;
+            
+            try {
+                const encrypted = CryptoJS.AES.encrypt(text, encryptionKey).toString();
+                return encrypted;
+            } catch (error) {
+                console.error('Encryption failed:', error);
+                return text; // Fallback to plain text
+            }
+        }
+
+        function decryptMessage(encryptedText) {
+            if (!ENCRYPTION_ENABLED || !encryptionKey) return encryptedText;
+            
+            try {
+                // Check if it looks like encrypted text (contains ciphertext structure)
+                if (!encryptedText.includes('U2FsdGVkX1')) {
+                    return encryptedText; // Probably not encrypted
+                }
+                
+                const decrypted = CryptoJS.AES.decrypt(encryptedText, encryptionKey).toString(CryptoJS.enc.Utf8);
+                return decrypted || encryptedText; // Return original if decryption fails
+            } catch (error) {
+                console.error('Decryption failed:', error);
+                return encryptedText; // Return original text
+            }
+        }
+
+        function toggleTheme() {
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('theme-icon').setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+            
+            // Update fixed input area
+            const fixedArea = document.getElementById('fixed-input-area');
+            if (isDark) {
+                fixedArea.classList.add('dark');
+            } else {
+                fixedArea.classList.remove('dark');
+            }
+            
+            initIcons();
+        }
+
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('theme-icon').setAttribute('data-lucide', 'sun');
+            document.getElementById('fixed-input-area').classList.add('dark');
+            initIcons();
+        }
+
+        async function fetchIP() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                document.getElementById('ip-display').textContent = data.ip;
+                debugLog(`IP fetched: ${data.ip}`);
+            } catch (e) { 
+                document.getElementById('ip-display').textContent = "Unknown";
+                debugLog('Failed to fetch IP');
+            }
+        }
+
+        // Format timestamp
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffMins = Math.floor(diffMs / 60000);
+            const diffHours = Math.floor(diffMs / 3600000);
+            
+            // If less than 1 minute ago
+            if (diffMins < 1) return 'Just now';
+            // If less than 1 hour ago
+            if (diffMins < 60) return `${diffMins}m ago`;
+            // If less than 24 hours ago
+            if (diffHours < 24) return `${diffHours}h ago`;
+            // If today
+            if (date.getDate() === now.getDate()) {
+                return `Today ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            }
+            // If yesterday
+            if (date.getDate() === now.getDate() - 1) {
+                return `Yesterday ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            }
+            // Otherwise show date
+            return `${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        }
+
+        // Save reaction to cloud
+        async function saveReactionToCloud(messageId, emoji) {
+            try {
+                const user = document.getElementById('userInput').value.trim() || "Anonymous";
+                const reactionData = {
+                    type: 'reaction',
+                    messageId: messageId,
+                    emoji: emoji,
+                    user: user,
+                    timestamp: Date.now()
+                };
+                
+                debugLog(`Sending reaction: ${emoji} for message ${messageId}`);
+                
+                const response = await fetch(`${WORKER_URL}?room=${room}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(reactionData)
+                });
+                
+                if (response.ok) {
+                    debugLog('Reaction saved successfully');
+                    showToast(`Reacted with ${emoji}`, 'success', 1500);
+                    return true;
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            } catch (error) {
+                console.error('Failed to save reaction:', error);
+                debugLog(`Failed to save reaction: ${error.message}`);
+                showToast('Failed to save reaction', 'warning', 2000);
+                return false;
+            }
+        }
+
+        // FIXED: Load function with proper error handling
+        async function load() {
+            try {
+                debugLog('Loading messages...');
+                const res = await fetch(`${WORKER_URL}?room=${room}`);
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                
+                const data = await res.json();
+                const chat = document.getElementById('chat');
+                const currentUser = document.getElementById('userInput').value.trim();
+                
+                debugLog(`Received ${data.length} messages from server`);
+                
+                if (data.length !== lastMessageCount) {
+                    chat.innerHTML = '';
+                    
+                    // Group messages by ID for reactions
+                    const messageMap = new Map();
+                    const reactions = [];
+                    
+                    // First pass: collect messages and reactions
+                    data.forEach((item, index) => {
+                        if (item.type === 'reaction') {
+                            reactions.push(item);
+                        } else {
+                            // Use index as fallback ID if no ID exists
+                            const messageId = item.id || `msg_${item.timestamp || Date.now()}_${index}`;
+                            messageMap.set(messageId, { ...item, id: messageId });
+                        }
+                    });
+                    
+                    // Group reactions by message ID
+                    const reactionsByMessage = {};
+                    reactions.forEach(reaction => {
+                        if (!reactionsByMessage[reaction.messageId]) {
+                            reactionsByMessage[reaction.messageId] = [];
+                        }
+                        reactionsByMessage[reaction.messageId].push(reaction);
+                    });
+                    
+                    // Second pass: render messages with their reactions
+                    Array.from(messageMap.values()).forEach((m, idx) => {
+                        const isMe = currentUser && m.user === currentUser;
+                        // Decrypt message
+                        const decryptedText = decryptMessage(m.text || m.message || '');
+                        
+                        // Process text to add emoji spacing
+                        const processedText = (decryptedText || '').replace(/([\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])/gu, '<span class="emoji">$1</span>');
+                        
+                        // Get reactions for this message
+                        const messageId = m.id;
+                        const messageReactions = reactionsByMessage[messageId] || [];
+                        
+                        // Count reactions by emoji
+                        const reactionCounts = {};
+                        messageReactions.forEach(r => {
+                            reactionCounts[r.emoji] = (reactionCounts[r.emoji] || 0) + 1;
+                        });
+                        
+                        // Create reaction HTML
+                        let reactionHtml = '';
+                        if (Object.keys(reactionCounts).length > 0) {
+                            reactionHtml = '<div class="reaction-container">';
+                            Object.entries(reactionCounts).forEach(([emoji, count]) => {
+                                // Escape emoji for HTML attribute
+                                const escapedEmoji = emoji.replace(/"/g, '&quot;');
+                                reactionHtml += `
+                                    <div class="reaction-badge ${document.documentElement.classList.contains('dark') ? 'dark' : ''}" onclick="addReactionToMessage('${messageId}', '${escapedEmoji}')">
+                                        <span>${emoji}</span>
+                                        <span class="reaction-count ${document.documentElement.classList.contains('dark') ? 'dark' : ''}">${count}</span>
+                                    </div>
+                                `;
+                            });
+                            reactionHtml += '</div>';
+                        }
+                        
+                        const messageHtml = `
+                            <div class="message-container ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div class="flex items-center gap-2 mb-1 px-1">
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">${m.user || 'Anonymous'}</span>
+                                    ${ENCRYPTION_ENABLED ? '<span class="encryption-indicator"><i data-lucide="lock" class="w-2 h-2"></i><span>E2E</span></span>' : ''}
+                                </div>
+                                <div class="message-bubble relative shadow-sm ${isMe 
+                                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-l-xl rounded-tr-xl' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-r-xl rounded-tl-xl'} px-4 py-2 text-sm message-text"
+                                    onmousedown="startPress(event, '${messageId}', ${isMe})" 
+                                    ontouchstart="startPress(event, '${messageId}', ${isMe})"
+                                    onmouseup="endPress()" 
+                                    ontouchend="endPress()">
+                                    ${processedText}
+                                    ${reactionHtml}
+                                </div>
+                                <div class="message-timestamp">
+                                    ${formatTimestamp(m.timestamp)}
+                                </div>
+                            </div>
+                        `;
+                        
+                        chat.innerHTML += messageHtml;
+                    });
+                    
+                    lastMessageCount = data.length;
+                    scrollToBottom();
+                    debugLog('Messages loaded successfully');
+                }
+            } catch (e) {
+                debugLog(`Failed to load messages: ${e.message}`);
+                showToast('Failed to load messages', 'error', 3000);
+            }
+        }
+
+        // FIXED: Send function that actually works
+        async function send() {
+            const now = Date.now();
+            const timeSinceLastMessage = now - lastSentTime;
+            
+            // Check if cooldown is active
+            if (timeSinceLastMessage < MESSAGE_COOLDOWN) {
+                showRateLimitWarning(timeSinceLastMessage);
+                return;
+            }
+            
+            const user = document.getElementById('userInput').value.trim() || "Anonymous";
+            let text = document.getElementById('textInput').value.trim();
+            if (!text) {
+                showToast('Please enter a message', 'warning', 2000);
+                return;
+            }
+            
+            // Show sending indicator
+            const sendBtn = document.getElementById('send-btn');
+            const originalHTML = sendBtn.innerHTML;
+            sendBtn.innerHTML = '<div class="loading-dots"><span></span><span></span><span></span></div>';
+            sendBtn.disabled = true;
+            
+            try {
+                // Encrypt message before sending
+                let encryptedText = text;
+                if (ENCRYPTION_ENABLED) {
+                    encryptedText = encryptMessage(text);
+                }
+                
+                localStorage.setItem('swiftchat_nick', user);
+                
+                // Create message data
+                const messageData = {
+                    user: user,
+                    text: encryptedText,
+                    timestamp: Date.now(),
+                    id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+                };
+                
+                debugLog(`Sending message: ${text.substring(0, 50)}...`);
+                
+                // FIXED: Send POST request properly
+                const response = await fetch(`${WORKER_URL}?room=${room}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(messageData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+                }
+                
+                const result = await response.json();
+                debugLog(`Server response: ${JSON.stringify(result)}`);
+                
+                // Clear input
+                document.getElementById('textInput').value = '';
+                lastSentTime = now;
+                updateSendButtonState();
+                
+                // Load messages to show the new one
+                await load();
+                
+                // Show success toast
+                showToast('Message sent securely', 'success', 2000);
+                
+            } catch (error) {
+                console.error('Failed to send message:', error);
+                debugLog(`Send error: ${error.message}`);
+                showToast('Failed to send message. Please try again.', 'error', 3000);
+            } finally {
+                // Restore send button
+                sendBtn.innerHTML = originalHTML;
+                sendBtn.disabled = false;
+                initIcons();
+            }
+        }
+
+        async function addReactionToMessage(messageId, emoji) {
+            const success = await saveReactionToCloud(messageId, emoji);
+            if (success) {
+                // Small delay to ensure server has processed the reaction
+                setTimeout(load, 500);
+            }
+        }
+
+        function showRateLimitWarning(timeSinceLastMessage) {
+            const overlay = document.getElementById('rate-limit-overlay');
+            const timeLeft = Math.ceil((MESSAGE_COOLDOWN - timeSinceLastMessage) / 1000);
+            overlay.querySelector('.text-xs').textContent = `Wait ${timeLeft}s`;
+            overlay.classList.remove('hidden');
+            
+            // Update countdown
+            const interval = setInterval(() => {
+                const currentTimeLeft = Math.ceil((MESSAGE_COOLDOWN - (Date.now() - lastSentTime)) / 1000);
+                if (currentTimeLeft <= 0) {
+                    overlay.classList.add('hidden');
+                    clearInterval(interval);
+                } else {
+                    overlay.querySelector('.text-xs').textContent = `Wait ${currentTimeLeft}s`;
+                }
+            }, 1000);
+            
+            // Auto-hide after cooldown
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                clearInterval(interval);
+            }, MESSAGE_COOLDOWN - timeSinceLastMessage);
+        }
+
+        function updateSendButtonState() {
+            const sendBtn = document.getElementById('send-btn');
+            const timeSinceLastMessage = Date.now() - lastSentTime;
+            
+            if (timeSinceLastMessage < MESSAGE_COOLDOWN) {
+                sendBtn.disabled = true;
+                sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                sendBtn.classList.remove('hover:from-blue-500', 'hover:to-blue-400', 'hover:shadow-xl');
+                
+                // Re-enable after cooldown
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    sendBtn.classList.add('hover:from-blue-500', 'hover:to-blue-400', 'hover:shadow-xl');
+                }, MESSAGE_COOLDOWN - timeSinceLastMessage);
+            }
+        }
+
+        function handleKeyPress(e) { 
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                send(); 
+            }
+        }
+        
+        function scrollToBottom() { 
+            const chat = document.getElementById('chat'); 
+            chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' }); 
+        }
+
+        // Long Press Logic
+        function startPress(e, id, isMe) {
+            selectedMessageId = id;
+            longPressTimer = setTimeout(() => {
+                showContextMenu(e, isMe);
+            }, 600);
+        }
+
+        function endPress() { 
+            clearTimeout(longPressTimer); 
+            // Close emoji panel if clicking elsewhere
+            document.getElementById('emoji-panel').classList.remove('active');
+        }
+
+        function showContextMenu(e, isMe) {
+            const menu = document.getElementById('context-menu');
+            const deleteBtn = document.getElementById('delete-btn');
+            const reactions = document.getElementById('reaction-tools');
+            
+            // Adjust menu based on ownership
+            deleteBtn.style.display = isMe ? 'flex' : 'none';
+            reactions.style.display = isMe ? 'none' : 'flex';
+
+            menu.classList.add('active');
+            const x = e.pageX || e.touches[0].pageX;
+            const y = e.pageY || e.touches[0].pageY;
+            menu.style.left = `${Math.min(x, window.innerWidth - 160)}px`;
+            menu.style.top = `${Math.min(y, window.innerHeight - 100)}px`;
+            
+            // Close emoji panel
+            document.getElementById('emoji-panel').classList.remove('active');
+        }
+
+        async function addReaction(emoji) {
+            if (selectedMessageId) {
+                await addReactionToMessage(selectedMessageId, emoji);
+                closeMenu();
+            }
+        }
+
+        function deleteMessage() {
+            // In a real app, send DELETE to server. Here we just hide it locally.
+            showToast('Message deleted (local only)', 'info', 2000);
+            closeMenu();
+        }
+
+        function closeMenu() { 
+            document.getElementById('context-menu').classList.remove('active'); 
+            // Also close emoji panel
+            document.getElementById('emoji-panel').classList.remove('active');
+        }
+        
+        document.addEventListener('click', (e) => { 
+            if (!e.target.closest('#context-menu')) closeMenu(); 
+        });
+
+        // First time visitor detection
+        function checkFirstTimeVisitor() {
+            const hasVisited = localStorage.getItem('swiftchat_has_visited');
+            if (!hasVisited) {
+                setTimeout(() => {
+                    document.getElementById('first-time-overlay').classList.remove('hidden');
+                    document.getElementById('first-time-card').classList.add(document.documentElement.classList.contains('dark') ? 'dark' : '');
+                }, 1000);
+                localStorage.setItem('swiftchat_has_visited', 'true');
+            }
+        }
+
+        function dismissFirstTime() {
+            document.getElementById('first-time-overlay').classList.add('hidden');
+            // Show PWA install prompt after dismissing first time overlay
+            setTimeout(showPWAInstallPrompt, 500);
+        }
+
+        // PWA Installation Logic
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Store for later use
+            window.deferredPrompt = e;
+            debugLog('PWA install prompt available');
+        });
+
+        function showPWAInstallPrompt() {
+            if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+                // Close emoji panel if open
+                document.getElementById('emoji-panel').classList.remove('active');
+                
+                // Position the PWA prompt above the input area
+                const fixedArea = document.getElementById('fixed-input-area');
+                const rect = fixedArea.getBoundingClientRect();
+                document.getElementById('pwa-prompt').style.bottom = `${window.innerHeight - rect.top + 20}px`;
+                document.getElementById('pwa-prompt').classList.remove('hidden');
+                debugLog('Showing PWA install prompt');
+            } else {
+                showToast('App install is not available', 'info', 2000);
+                debugLog('PWA install not available');
+            }
+        }
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        showToast('App installed successfully!', 'success', 3000);
+                        debugLog('PWA installed');
+                    } else {
+                        showToast('Installation cancelled', 'info', 2000);
+                        debugLog('PWA installation cancelled');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('pwa-prompt').classList.add('hidden');
+                });
+            }
+        }
+
+        function dismissPWA() {
+            document.getElementById('pwa-prompt').classList.add('hidden');
+            localStorage.setItem('pwa_dismissed', 'true');
+            debugLog('PWA prompt dismissed');
+        }
+
+        // Refresh website function
+        function refreshWebsite() {
+            showToast('Refreshing chat...', 'info', 1500);
+            debugLog('Refreshing website');
+            // Clear chat and reload messages
+            document.getElementById('chat').innerHTML = '';
+            lastMessageCount = 0;
+            load();
+        }
+
+        // Check if PWA is already installed
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            debugLog('Running as PWA');
+        } else if (localStorage.getItem('pwa_dismissed') === 'true') {
+            debugLog('PWA was previously dismissed');
+        }
+
+        // Update fixed input area theme on load
+        function updateFixedInputAreaTheme() {
+            const fixedArea = document.getElementById('fixed-input-area');
+            if (document.documentElement.classList.contains('dark')) {
+                fixedArea.classList.add('dark');
+            } else {
+                fixedArea.classList.remove('dark');
+            }
+        }
+
+        // Initialize everything when page loads
+        window.addEventListener('load', () => {
+            if (Notification.permission !== 'granted') Notification.requestPermission();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
+                    console.log('Service Worker registration failed:', err);
+                    debugLog(`Service Worker failed: ${err.message}`);
+                });
+            }
+            document.getElementById('userInput').value = localStorage.getItem('swiftchat_nick') || "";
+            
+            // Initialize encryption and emoji picker
+            initEncryption();
+            initEmojiPicker();
+            updateFixedInputAreaTheme();
+            
+            // Check for first time visitor
+            checkFirstTimeVisitor();
+            
+            // Show welcome toast if not first time
+            if (localStorage.getItem('swiftchat_has_visited')) {
+                setTimeout(() => {
+                    showToast('Welcome back to SwiftChat! 🔒', 'info', 3000);
+                }, 1000);
+            }
+            
+            debugLog('SwiftChat initialized successfully');
+        });
+
+        // Close emoji panel when scrolling
+        window.addEventListener('scroll', () => {
+            const emojiPanel = document.getElementById('emoji-panel');
+            if (emojiPanel.classList.contains('active')) {
+                toggleEmojis();
+            }
+        });
+
+        // Initialize everything
+        fetchIP();
+        load();
+        setInterval(load, 3000);
+    </script>
+</body>
+</html>
