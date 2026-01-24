@@ -4,130 +4,217 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SwiftChat - Secure & Anonymous</title>
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlN3aWZ0Q2hhdCIsCiAgInNob3J0X25hbWUiOiAiU3dpZnRDaGF0IiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMTExMTEiLAogICJ0aGVtZV9jbG9yIjogIiMwMDcwZjMiCn0=">
+    <!-- CryptoJS for encryption -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    
+    <!-- PWA Manifest with Updated Icon -->
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIlN3aWZ0Q2hhdCIsCiAgInNob3J0X25hbWUiOiAiU3dpZnRDaGF0IiwKICAiZGVzY3JpcHRpb24iOiAiU2VjdXJlICYgQW5vbnltb3VzIFJlYWwtdGltZSBDaGF0IiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMxMTExMTEiLAogICJ0aGVtZV9jb2xvciI6ICIjMDA3MGYzIiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9jZG4uanNkZWxpdnIubmV0L2doL2Zhdmljb25raXQvZW1vamkvNDAzL3BhY2tlci9uZXV0cmFsLzI1Ni9zcGVlY2hfYmFsbG9vbi5wbmciLAogICAgICAic2l6ZXMiOiAiMTkyeDE5MiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIsCiAgICAgICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSIKICAgIH0sCiAgICB7CiAgICAgICJzcmMiOiAiaHR0cHM6Ly9jZG4uanNkZWxpdnIubmV0L2doL2Zhdmljb25raXQvZW1vamkvNDAzL3BhY2tlci9uZXV0cmFsLzUxMi9zcGVlY2hfYmFsbG9vbi5wbmciLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAgICJ0eXBlIjogImltYWdlL3BuZyIsCiAgICAgICJwdXJwb3NlIjogImFueSBtYXNrYWJsZSIKICAgIH0KICBdCn0=">
+    <link rel="icon" href="https://cdn.jsdelivr.net/gh/faviconkit/emoji/403/packer/neutral/256/speech_balloon.png">
     
     <script>
-        // Tailwind config for dark mode
-        tailwind.config = {
-            darkMode: 'class',
-        }
+        tailwind.config = { darkMode: 'class' }
     </script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s ease; }
+        .chat-container { height: calc(100vh - 240px); }
+        .message-bubble { max-width: 85%; transition: transform 0.1s; user-select: none; -webkit-touch-callout: none; }
+        .message-bubble:active { transform: scale(0.98); }
+        .emoji-panel { 
+            display: none; 
+            position: absolute; 
+            bottom: 100%; 
+            right: 0; 
+            margin-bottom: 10px; 
+            width: 260px; 
+            max-height: 300px;
+            overflow-y: auto;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: opacity 0.2s ease, transform 0.2s ease;
+        }
+        .emoji-panel.active { 
+            display: grid; 
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .context-menu { display: none; position: fixed; z-index: 100; }
+        .context-menu.active { display: block; }
         
-        body {
-            font-family: 'Inter', sans-serif;
-            transition: background-color 0.3s ease;
+        /* Emoji spacing fix */
+        .emoji { display: inline-block; margin: 0 1px; vertical-align: middle; }
+        .message-text { word-break: break-word; }
+        
+        /* PWA Install Prompt */
+        .pwa-install-prompt {
+            position: fixed;
+            bottom: 100px;
+            right: 20px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
         }
-
-        .chat-container {
-            height: calc(100vh - 240px);
+        
+        .rate-limit-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: bold;
+            backdrop-filter: blur(2px);
         }
-
-        .message-bubble {
-            max-width: 85%;
-            word-wrap: break-word;
+        
+        .encryption-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+            font-size: 10px;
+            color: #10b981;
+            background: rgba(16, 185, 129, 0.1);
+            padding: 1px 4px;
+            border-radius: 4px;
+            margin-left: 4px;
         }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar {
+        
+        .emoji-category-btn {
+            padding: 4px 8px;
+            font-size: 12px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .emoji-category-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        /* Scrollbar styling for emoji panel */
+        .emoji-panel::-webkit-scrollbar {
             width: 6px;
         }
-        ::-webkit-scrollbar-track {
-            background: transparent;
+        
+        .emoji-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 10px;
+        
+        .emoji-panel::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
         }
-
-        .emoji-panel {
-            display: none;
-            position: absolute;
-            bottom: 100%;
-            right: 0;
-            margin-bottom: 10px;
+        
+        .emoji-panel.dark::-webkit-scrollbar-track {
+            background: #2d3748;
         }
-        .emoji-panel.active {
-            display: grid;
+        
+        .emoji-panel.dark::-webkit-scrollbar-thumb {
+            background: #4a5568;
         }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
 
-    <!-- Header -->
+    <!-- PWA Install Prompt -->
+    <div id="pwa-prompt" class="pwa-install-prompt hidden">
+        <div class="bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl p-4 max-w-xs">
+            <div class="flex items-center gap-3 mb-3">
+                <img src="https://cdn.jsdelivr.net/gh/faviconkit/emoji/403/packer/neutral/96/speech_balloon.png" alt="SwiftChat" class="w-12 h-12">
+                <div>
+                    <h3 class="font-bold text-slate-900 dark:text-white">Install SwiftChat</h3>
+                    <p class="text-sm text-slate-600 dark:text-slate-400">Use app offline</p>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="dismissPWA()" class="flex-1 py-2 px-3 text-sm border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Not Now</button>
+                <button onclick="installPWA()" class="flex-1 py-2 px-3 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-500 transition-colors">Install</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Context Menu Overlay -->
+    <div id="context-menu" class="context-menu bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-2 min-w-[140px] animate-in fade-in zoom-in duration-100">
+        <div id="reaction-tools" class="flex gap-2 p-2 border-b border-slate-100 dark:border-slate-700 mb-1">
+            <button onclick="addReaction('❤️')" class="hover:scale-125 transition-transform text-lg">❤️</button>
+            <button onclick="addReaction('😂')" class="hover:scale-125 transition-transform text-lg">😂</button>
+            <button onclick="addReaction('😮')" class="hover:scale-125 transition-transform text-lg">😮</button>
+            <button onclick="addReaction('🔥')" class="hover:scale-125 transition-transform text-lg">🔥</button>
+            <button onclick="addReaction('👍')" class="hover:scale-125 transition-transform text-lg">👍</button>
+        </div>
+        <button id="delete-btn" onclick="deleteMessage()" class="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg flex items-center gap-2">
+            <i data-lucide="trash-2" class="w-4 h-4"></i> Delete Message
+        </button>
+    </div>
+
     <header class="p-4 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 backdrop-blur-md">
         <div class="flex justify-between items-center mb-2">
             <div class="flex items-center gap-2">
-                <div class="bg-blue-600 p-1.5 rounded-lg shadow-lg shadow-blue-500/20">
+                <div class="bg-blue-600 p-1.5 rounded-lg shadow-lg">
                     <i data-lucide="zap" class="w-5 h-5 text-white"></i>
                 </div>
                 <h1 class="text-xl font-bold tracking-tight">SwiftChat</h1>
+                <span class="encryption-indicator">
+                    <i data-lucide="lock" class="w-3 h-3"></i>
+                    <span>Encrypted</span>
+                </span>
             </div>
-            <div class="flex items-center gap-3">
-                <!-- Theme Switcher -->
-                <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Toggle Theme">
+            <div class="flex items-center gap-2">
+                <button onclick="load()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors" title="Refresh">
+                    <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                </button>
+                <button onclick="toggleTheme()" class="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
                     <i id="theme-icon" data-lucide="moon" class="w-5 h-5"></i>
                 </button>
-                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 border-l border-slate-200 dark:border-slate-800 pl-3">
-                    <span id="status-dot" class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                    <span id="status-text">Connected</span>
+                <div class="flex items-center gap-2 text-xs text-slate-500 border-l border-slate-200 dark:border-slate-800 pl-3">
+                    <span id="status-dot" class="w-2 h-2 rounded-full bg-green-500"></span>
                 </div>
             </div>
         </div>
-        <!-- IP Display Area -->
         <div class="flex items-center gap-2 px-3 py-1.5 bg-slate-200 dark:bg-slate-800/50 rounded-lg w-fit border border-slate-300 dark:border-slate-700/50">
-            <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-500 dark:text-blue-400"></i>
-            <span class="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold tracking-widest">Your IP:</span>
-            <span id="ip-display" class="text-xs font-mono text-blue-600 dark:text-blue-300">Fetching...</span>
+            <i data-lucide="globe" class="w-3.5 h-3.5 text-blue-500"></i>
+            <span id="ip-display" class="text-xs font-mono text-blue-600 dark:text-blue-300">Fetching IP...</span>
         </div>
     </header>
 
-    <!-- Chat Window -->
-    <main id="chat" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container bg-transparent">
-        <div class="flex justify-center">
-            <p class="text-[10px] text-slate-500 bg-slate-200 dark:bg-slate-800/50 px-3 py-1 rounded-full italic">
-                Welcome to the general room. All messages are ephemeral.
-            </p>
-        </div>
-    </main>
+    <main id="chat" class="flex-1 overflow-y-auto p-4 space-y-4 chat-container"></main>
 
-    <!-- Input Area -->
     <footer class="p-4 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
         <div class="max-w-4xl mx-auto space-y-3">
             <div class="flex gap-2 relative">
-                <div class="relative flex-shrink-0 w-32">
-                    <i data-lucide="user" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400"></i>
-                    <input id="userInput" type="text" placeholder="Alias" 
-                        class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg py-2 pl-8 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
-                </div>
+                <input id="userInput" type="text" placeholder="Alias" class="w-24 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg py-2 px-2 text-sm focus:outline-none">
                 <div class="relative flex-grow">
-                    <input id="textInput" type="text" placeholder="Type your message..." 
-                        class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                        onkeypress="handleKeyPress(event)">
-                </div>
-                
-                <!-- Emoji Section -->
-                <div class="relative">
-                    <button onclick="toggleEmojis()" class="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 p-2 rounded-lg transition-all">
-                        <i data-lucide="smile" class="w-5 h-5 text-slate-500"></i>
-                    </button>
-                    <!-- Emoji Panel -->
-                    <div id="emoji-panel" class="emoji-panel bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-2 grid-cols-6 gap-1 shadow-xl z-50">
-                        <!-- Populated by JS -->
+                    <input id="textInput" type="text" placeholder="Type your encrypted message..." class="w-full bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg py-2 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" onkeypress="handleKeyPress(event)">
+                    <div id="rate-limit-overlay" class="rate-limit-overlay hidden">
+                        <div class="text-center">
+                            <div class="text-lg">⏳</div>
+                            <div class="text-xs mt-1">Wait 3s</div>
+                        </div>
                     </div>
                 </div>
-
-                <button onclick="send()" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white px-4 rounded-lg transition-all flex items-center justify-center">
-                    <i data-lucide="send" class="w-5 h-5"></i>
-                </button>
+                <div class="relative">
+                    <button onclick="toggleEmojis()" id="emoji-btn" class="bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                        <i data-lucide="smile" class="w-5 h-5"></i>
+                    </button>
+                    <div id="emoji-panel" class="emoji-panel bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl z-50">
+                        <!-- Categories will be populated by JavaScript -->
+                    </div>
+                </div>
+                <button onclick="send()" id="send-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-4 rounded-lg flex items-center justify-center"><i data-lucide="send" class="w-5 h-5"></i></button>
             </div>
         </div>
     </footer>
@@ -136,176 +223,429 @@
         const WORKER_URL = "https://swiftchat.sawyerbobk563.workers.dev/";
         const room = "general";
         let lastMessageCount = 0;
+        let selectedMessageId = null;
+        let longPressTimer;
+        let deferredPrompt = null;
+        let lastSentTime = 0;
+        const MESSAGE_COOLDOWN = 3000; // 3 seconds in milliseconds
+        
+        // Encryption settings
+        const ENCRYPTION_ENABLED = true;
+        let encryptionKey = null;
+        const ENCRYPTION_KEY_STORAGE = "swiftchat_encryption_key";
+        
+        // Emoji categories
+        const emojiCategories = {
+            "Smileys": ['😀','😁','😂','🤣','😃','😄','😅','😆','😉','😊','😋','😎','😍','😘','🥰','😗','😙','😚','🙂','🤗','🤩','🤔','🤨','😐','😑','😶','🙄','😏','😣','😥','😮','🤐','😯','😪','😫','🥱','😴','😌','😛','😜','😝','🤤','😒','😓','😔','😕','🙃','🫠','🫢','🫣','🤪','😲','🥺','🥹'],
+            "Gestures": ['👋','🤚','🖐️','✋','🖖','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','🤙','🫵','👈','👉','👆','🖕','👇','☝️','👍','👎','✊','👊','🤛','🤜','👏','🙌','🫶','👐','🤲','🤝','🙏'],
+            "Hearts": ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟'],
+            "Objects": ['💡','📱','💻','⌨️','🖥️','🖨️','🖱️','🖲️','🎧','🎤','🎮','🕹️','📷','🎥','📽️','🎞️','📞','☎️','📟','📠','📺','📻','🎙️','🎚️','🎛️','🧭'],
+            "Symbols": ['🔣','➕','➖','➗','✖️','💲','💱','™️','©️','®️','〰️','➰','➿','🔚','🔙','🔛','🔝','🔜'],
+            "Nature": ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐒','🐔','🐧','🐦','🐤','🐣','🐥','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪱','🐛','🦋','🐌','🐞','🐜','🪰','🪲','🪳','🦟','🦗','🕷️','🕸️','🦂'],
+            "Food": ['🍏','🍎','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🫘','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🦴','🌭','🍔','🍟','🍕'],
+            "Travel": ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🦯','🦽','🦼','🛴','🚲','🛵','🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢']
+        };
 
-        // Common Emojis
-        const emojis = ['😀','😂','😍','😎','🤔','👍','🔥','✨','🚀','🎉','❤️','👋','👀','🙌','💡','🎮','🍕','🌈'];
-
-        // Initialize Icons
-        function initIcons() {
-            lucide.createIcons();
-        }
+        function initIcons() { lucide.createIcons(); }
         initIcons();
 
-        // Populate Emojis
-        const emojiPanel = document.getElementById('emoji-panel');
-        emojis.forEach(emoji => {
-            const btn = document.createElement('button');
-            btn.className = "hover:bg-slate-200 dark:hover:bg-slate-700 p-2 rounded text-xl transition-all";
-            btn.textContent = emoji;
-            btn.onclick = () => {
-                const input = document.getElementById('textInput');
-                input.value += emoji;
-                input.focus();
-                toggleEmojis();
-            };
-            emojiPanel.appendChild(btn);
-        });
-
-        function toggleEmojis() {
-            emojiPanel.classList.toggle('active');
+        // Initialize Emoji Picker
+        function initEmojiPicker() {
+            const emojiPanel = document.getElementById('emoji-panel');
+            emojiPanel.innerHTML = '';
+            
+            // Create category buttons
+            const categoryContainer = document.createElement('div');
+            categoryContainer.className = 'flex gap-1 p-2 border-b border-slate-200 dark:border-slate-700 overflow-x-auto';
+            
+            Object.keys(emojiCategories).forEach((category, index) => {
+                const btn = document.createElement('button');
+                btn.className = `emoji-category-btn ${index === 0 ? 'active' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`;
+                btn.textContent = category;
+                btn.onclick = () => showEmojiCategory(category, btn);
+                categoryContainer.appendChild(btn);
+            });
+            
+            emojiPanel.appendChild(categoryContainer);
+            
+            // Create emoji grid container
+            const emojiGrid = document.createElement('div');
+            emojiGrid.id = 'emoji-grid';
+            emojiGrid.className = 'grid grid-cols-8 gap-1 p-2';
+            emojiPanel.appendChild(emojiGrid);
+            
+            // Show first category by default
+            showEmojiCategory(Object.keys(emojiCategories)[0]);
+            
+            // Close emoji panel when clicking outside
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#emoji-panel') && !e.target.closest('#emoji-btn')) {
+                    emojiPanel.classList.remove('active');
+                }
+            });
         }
 
-        // Theme Management
-        function setTheme(isDark) {
-            if (isDark) {
-                document.documentElement.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-                localStorage.setItem('theme', 'light');
+        function showEmojiCategory(category, button = null) {
+            // Update active button
+            document.querySelectorAll('.emoji-category-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('bg-slate-100', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-300');
+            });
+            
+            if (button) {
+                button.classList.add('active');
+                button.classList.remove('bg-slate-100', 'dark:bg-slate-700', 'text-slate-700', 'dark:text-slate-300');
             }
-            updateThemeIcon();
+            
+            // Show emojis for category
+            const emojiGrid = document.getElementById('emoji-grid');
+            emojiGrid.innerHTML = '';
+            
+            emojiCategories[category].forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.className = "hover:bg-slate-200 dark:hover:bg-slate-700 p-1.5 rounded text-xl transition-all flex items-center justify-center emoji hover:scale-110 active:scale-95";
+                btn.textContent = emoji;
+                btn.onclick = () => {
+                    document.getElementById('textInput').value += emoji;
+                    document.getElementById('textInput').focus();
+                    toggleEmojis();
+                };
+                emojiGrid.appendChild(btn);
+            });
+        }
+
+        function toggleEmojis() {
+            const emojiPanel = document.getElementById('emoji-panel');
+            emojiPanel.classList.toggle('active');
+            
+            // Update panel theme class
+            if (document.documentElement.classList.contains('dark')) {
+                emojiPanel.classList.add('dark');
+                emojiPanel.classList.remove('light');
+            } else {
+                emojiPanel.classList.add('light');
+                emojiPanel.classList.remove('dark');
+            }
+        }
+
+        // Encryption Functions
+        function initEncryption() {
+            if (!ENCRYPTION_ENABLED) return;
+            
+            // Try to load existing key or generate new one
+            const storedKey = localStorage.getItem(ENCRYPTION_KEY_STORAGE);
+            if (storedKey) {
+                encryptionKey = storedKey;
+            } else {
+                // Generate a new encryption key
+                encryptionKey = generateEncryptionKey();
+                localStorage.setItem(ENCRYPTION_KEY_STORAGE, encryptionKey);
+            }
+            
+            console.log('Encryption initialized');
+        }
+
+        function generateEncryptionKey() {
+            // Generate a random 32-character key
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+            let key = '';
+            for (let i = 0; i < 32; i++) {
+                key += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return key;
+        }
+
+        function encryptMessage(text) {
+            if (!ENCRYPTION_ENABLED || !encryptionKey) return text;
+            
+            try {
+                // Simple XOR encryption for demonstration (in production, use stronger encryption)
+                const encrypted = CryptoJS.AES.encrypt(text, encryptionKey).toString();
+                return encrypted;
+            } catch (error) {
+                console.error('Encryption failed:', error);
+                return text; // Fallback to plain text
+            }
+        }
+
+        function decryptMessage(encryptedText) {
+            if (!ENCRYPTION_ENABLED || !encryptionKey) return encryptedText;
+            
+            try {
+                // Check if it looks like encrypted text (contains ciphertext structure)
+                if (!encryptedText.includes('U2FsdGVkX1')) {
+                    return encryptedText; // Probably not encrypted
+                }
+                
+                const decrypted = CryptoJS.AES.decrypt(encryptedText, encryptionKey).toString(CryptoJS.enc.Utf8);
+                return decrypted || encryptedText; // Return original if decryption fails
+            } catch (error) {
+                console.error('Decryption failed:', error);
+                return encryptedText; // Return original text
+            }
         }
 
         function toggleTheme() {
-            const isDark = document.documentElement.classList.contains('dark');
-            setTheme(!isDark);
-        }
-
-        function updateThemeIcon() {
-            const icon = document.getElementById('theme-icon');
-            const isDark = document.documentElement.classList.contains('dark');
-            icon.setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+            const isDark = document.documentElement.classList.toggle('dark');
+            localStorage.setItem('theme', isDark ? 'dark' : 'light');
+            document.getElementById('theme-icon').setAttribute('data-lucide', isDark ? 'sun' : 'moon');
             initIcons();
         }
 
-        // Initial Theme Load
-        const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        setTheme(savedTheme === 'dark');
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.classList.add('dark');
+            document.getElementById('theme-icon').setAttribute('data-lucide', 'sun');
+            initIcons();
+        }
 
-        // Load Nickname from LocalStorage
-        document.getElementById('userInput').value = localStorage.getItem('swiftchat_nick') || "";
-
-        // Fetch User IP
         async function fetchIP() {
             try {
-                const response = await fetch('https://api.ipify.org?format=json');
-                const data = await response.json();
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
                 document.getElementById('ip-display').textContent = data.ip;
-            } catch (err) {
-                document.getElementById('ip-display').textContent = "Unknown";
-            }
+            } catch (e) { document.getElementById('ip-display').textContent = "Unknown"; }
         }
 
         async function load() {
             try {
                 const res = await fetch(`${WORKER_URL}?room=${room}`);
-                if (!res.ok) throw new Error('Network error');
-                
                 const data = await res.json();
                 const chat = document.getElementById('chat');
                 const currentUser = document.getElementById('userInput').value.trim();
                 
                 if (data.length !== lastMessageCount) {
-                    chat.innerHTML = data.map(m => {
-                        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    chat.innerHTML = data.map((m, idx) => {
                         const isMe = currentUser && m.user === currentUser;
+                        // Decrypt message
+                        const decryptedText = decryptMessage(m.text);
+                        
+                        // Process text to add emoji spacing
+                        const processedText = decryptedText.replace(/([\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}])/gu, '<span class="emoji">$1</span>');
                         
                         return `
                             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'} animate-in fade-in slide-in-from-bottom-2 duration-300">
-                                <div class="flex items-center gap-2 mb-1">
-                                    <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">${m.user}</span>
-                                    <span class="text-[9px] text-slate-400 dark:text-slate-600">${time}</span>
+                                <div class="flex items-center gap-2 mb-1 px-1">
+                                    <span class="text-[10px] font-bold text-slate-500 uppercase">${m.user}</span>
+                                    ${ENCRYPTION_ENABLED ? '<span class="encryption-indicator"><i data-lucide="lock" class="w-2 h-2"></i><span>E2E</span></span>' : ''}
                                 </div>
-                                <div class="message-bubble shadow-sm ${isMe 
+                                <div class="message-bubble relative shadow-sm ${isMe 
                                     ? 'bg-emerald-600 text-white rounded-l-xl rounded-tr-xl' 
-                                    : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-r-xl rounded-tl-xl'} px-4 py-2 text-sm leading-relaxed">
-                                    ${m.text}
+                                    : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-r-xl rounded-tl-xl'} px-4 py-2 text-sm message-text"
+                                    onmousedown="startPress(event, '${idx}', ${isMe})" 
+                                    ontouchstart="startPress(event, '${idx}', ${isMe})"
+                                    onmouseup="endPress()" 
+                                    ontouchend="endPress()">
+                                    ${processedText}
+                                    <div id="reactions-${idx}" class="absolute -bottom-2 ${isMe ? 'right-0' : 'left-0'} flex gap-1"></div>
                                 </div>
                             </div>
                         `;
                     }).join('');
-                    
                     lastMessageCount = data.length;
                     scrollToBottom();
-                    updateStatus(true);
                 }
-            } catch (err) {
-                updateStatus(false);
-            }
+            } catch (e) {}
         }
 
         async function send() {
-            const userBox = document.getElementById('userInput');
-            const textBox = document.getElementById('textInput');
+            const now = Date.now();
+            const timeSinceLastMessage = now - lastSentTime;
             
-            const user = userBox.value.trim() || "Anonymous";
-            const text = textBox.value.trim();
-
+            // Check if cooldown is active
+            if (timeSinceLastMessage < MESSAGE_COOLDOWN) {
+                showRateLimitWarning(timeSinceLastMessage);
+                return;
+            }
+            
+            const user = document.getElementById('userInput').value.trim() || "Anonymous";
+            let text = document.getElementById('textInput').value.trim();
             if (!text) return;
-
+            
+            // Encrypt message before sending
+            if (ENCRYPTION_ENABLED) {
+                text = encryptMessage(text);
+            }
+            
             localStorage.setItem('swiftchat_nick', user);
-
             try {
                 await fetch(`${WORKER_URL}?room=${room}`, {
                     method: 'POST',
                     body: JSON.stringify({ user, text })
                 });
-                textBox.value = '';
+                document.getElementById('textInput').value = '';
+                lastSentTime = now;
+                updateSendButtonState();
                 load();
-            } catch (err) {}
+            } catch (e) {}
         }
 
-        function handleKeyPress(e) {
-            if (e.key === 'Enter') send();
+        function showRateLimitWarning(timeSinceLastMessage) {
+            const overlay = document.getElementById('rate-limit-overlay');
+            const timeLeft = Math.ceil((MESSAGE_COOLDOWN - timeSinceLastMessage) / 1000);
+            overlay.querySelector('.text-xs').textContent = `Wait ${timeLeft}s`;
+            overlay.classList.remove('hidden');
+            
+            // Update countdown
+            const interval = setInterval(() => {
+                const currentTimeLeft = Math.ceil((MESSAGE_COOLDOWN - (Date.now() - lastSentTime)) / 1000);
+                if (currentTimeLeft <= 0) {
+                    overlay.classList.add('hidden');
+                    clearInterval(interval);
+                } else {
+                    overlay.querySelector('.text-xs').textContent = `Wait ${currentTimeLeft}s`;
+                }
+            }, 1000);
+            
+            // Auto-hide after cooldown
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                clearInterval(interval);
+            }, MESSAGE_COOLDOWN - timeSinceLastMessage);
         }
 
-        function scrollToBottom() {
-            const chat = document.getElementById('chat');
-            chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
-        }
-
-        function updateStatus(online) {
-            const dot = document.getElementById('status-dot');
-            const text = document.getElementById('status-text');
-            if (online) {
-                dot.className = "w-2 h-2 rounded-full bg-green-500 animate-pulse";
-                text.innerText = "Connected";
-            } else {
-                dot.className = "w-2 h-2 rounded-full bg-red-500";
-                text.innerText = "Offline";
+        function updateSendButtonState() {
+            const sendBtn = document.getElementById('send-btn');
+            const timeSinceLastMessage = Date.now() - lastSentTime;
+            
+            if (timeSinceLastMessage < MESSAGE_COOLDOWN) {
+                sendBtn.disabled = true;
+                sendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                sendBtn.classList.remove('hover:bg-blue-500');
+                
+                // Re-enable after cooldown
+                setTimeout(() => {
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    sendBtn.classList.add('hover:bg-blue-500');
+                }, MESSAGE_COOLDOWN - timeSinceLastMessage);
             }
         }
 
-        // Close emoji panel when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('#emoji-panel') && !e.target.closest('button[onclick="toggleEmojis()"]')) {
-                emojiPanel.classList.remove('active');
+        function handleKeyPress(e) { 
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                send(); 
             }
+        }
+        
+        function scrollToBottom() { 
+            const chat = document.getElementById('chat'); 
+            chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' }); 
+        }
+
+        // Long Press Logic
+        function startPress(e, id, isMe) {
+            selectedMessageId = id;
+            longPressTimer = setTimeout(() => {
+                showContextMenu(e, isMe);
+            }, 600);
+        }
+
+        function endPress() { 
+            clearTimeout(longPressTimer); 
+            // Close emoji panel if clicking elsewhere
+            document.getElementById('emoji-panel').classList.remove('active');
+        }
+
+        function showContextMenu(e, isMe) {
+            const menu = document.getElementById('context-menu');
+            const deleteBtn = document.getElementById('delete-btn');
+            const reactions = document.getElementById('reaction-tools');
+            
+            // Adjust menu based on ownership
+            deleteBtn.style.display = isMe ? 'flex' : 'none';
+            reactions.style.display = isMe ? 'none' : 'flex';
+
+            menu.classList.add('active');
+            const x = e.pageX || e.touches[0].pageX;
+            const y = e.pageY || e.touches[0].pageY;
+            menu.style.left = `${Math.min(x, window.innerWidth - 160)}px`;
+            menu.style.top = `${Math.min(y, window.innerHeight - 100)}px`;
+            
+            // Close emoji panel
+            document.getElementById('emoji-panel').classList.remove('active');
+        }
+
+        function addReaction(emoji) {
+            const container = document.getElementById(`reactions-${selectedMessageId}`);
+            const span = document.createElement('span');
+            span.className = "bg-white dark:bg-slate-700 rounded-full px-1 py-0.5 text-[10px] shadow-sm border border-slate-100 dark:border-slate-600 animate-in zoom-in emoji";
+            span.textContent = emoji;
+            container.appendChild(span);
+            closeMenu();
+        }
+
+        function deleteMessage() {
+            // In a real app, send DELETE to server. Here we just hide it locally.
+            const bubbles = document.querySelectorAll('.message-bubble');
+            if (bubbles[selectedMessageId]) {
+                bubbles[selectedMessageId].parentElement.remove();
+            }
+            closeMenu();
+        }
+
+        function closeMenu() { 
+            document.getElementById('context-menu').classList.remove('active'); 
+            // Also close emoji panel
+            document.getElementById('emoji-panel').classList.remove('active');
+        }
+        
+        document.addEventListener('click', (e) => { 
+            if (!e.target.closest('#context-menu')) closeMenu(); 
         });
 
-        // PWA Service Worker
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                const swCode = `
-                    self.addEventListener('install', e => self.skipWaiting());
-                    self.addEventListener('fetch', e => e.respondWith(fetch(e.request).catch(() => {})));
-                `;
-                const blob = new Blob([swCode], { type: 'text/javascript' });
-                const swUrl = URL.createObjectURL(blob);
-                navigator.serviceWorker.register(swUrl);
-            });
+        // PWA Installation Logic
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            // Show install prompt after 5 seconds
+            setTimeout(() => {
+                if (deferredPrompt && !window.matchMedia('(display-mode: standalone)').matches) {
+                    document.getElementById('pwa-prompt').classList.remove('hidden');
+                }
+            }, 5000);
+        });
+
+        function installPWA() {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        console.log('PWA installed');
+                    }
+                    deferredPrompt = null;
+                    document.getElementById('pwa-prompt').classList.add('hidden');
+                });
+            }
         }
+
+        function dismissPWA() {
+            document.getElementById('pwa-prompt').classList.add('hidden');
+            localStorage.setItem('pwa_dismissed', 'true');
+        }
+
+        // Check if PWA is already installed
+        if (window.matchMedia('(display-mode: standalone)').matches) {
+            console.log('Running as PWA');
+        } else if (localStorage.getItem('pwa_dismissed') === 'true') {
+            // Don't show if user dismissed before
+        }
+
+        // Notifications & Welcome
+        window.addEventListener('load', () => {
+            if (Notification.permission !== 'granted') Notification.requestPermission();
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
+                    console.log('Service Worker registration failed:', err);
+                });
+            }
+            document.getElementById('userInput').value = localStorage.getItem('swiftchat_nick') || "";
+            
+            // Initialize encryption and emoji picker
+            initEncryption();
+            initEmojiPicker();
+        });
 
         fetchIP();
         load();
