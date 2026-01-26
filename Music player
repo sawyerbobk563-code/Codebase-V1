@@ -1,1 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streamify - Infinite Music</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* Smooth progress bar */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 12px; width: 12px;
+            border-radius: 50%; background: #fff; margin-top: -4px; cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: #4b5563; border-radius: 2px;
+        }
+        input[type=range]:focus::-webkit-slider-runnable-track { background: #1DB954; }
 
+        @keyframes pulse-bg {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .loading-skeleton { animation: pulse-bg 1.5s infinite ease-in-out; }
+    </style>
+</head>
+<body class="bg-black text-white h-screen flex flex-col overflow-hidden font-sans">
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-black flex flex-col p-6 gap-6 hidden md:flex border-r border-gray-900">
+            <div class="flex items-center gap-2 mb-4">
+                <i data-lucide="music" class="w-8 h-8 text-green-500"></i>
+                <span class="text-2xl font-bold tracking-tight">Streamify</span>
+            </div>
+            
+            <nav class="flex flex-col gap-4">
+                <button onclick="resetToHome()" class="flex items-center gap-4 text-gray-300 hover:text-white transition font-medium text-left">
+                    <i data-lucide="home" class="w-6 h-6"></i> Home
+                </button>
+                <div class="flex items-center gap-4 text-gray-300 hover:text-white transition font-medium cursor-default">
+                    <i data-lucide="search" class="w-6 h-6"></i> Search
+                </div>
+                <div class="flex items-center gap-4 text-gray-300 hover:text-white transition font-medium cursor-default">
+                    <i data-lucide="library" class="w-6 h-6"></i> Your Library
+                </div>
+            </nav>
+
+            <!-- Artist Bio (Last.fm) -->
+            <div id="artist-bio-container" class="mt-auto hidden border-t border-gray-800 pt-4">
+                <h3 class="text-xs uppercase text-gray-500 font-bold mb-2">Artist Bio</h3>
+                <p id="artist-bio-text" class="text-xs text-gray-400 line-clamp-6 leading-relaxed mb-2"></p>
+                <div class="flex gap-2 flex-wrap" id="artist-tags"></div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-scroll-container" class="flex-1 bg-gradient-to-b from-gray-900 to-black overflow-y-auto relative m-2 rounded-lg p-6">
+            <header class="flex justify-between items-center mb-8 sticky top-0 z-10 py-2 bg-opacity-90 backdrop-blur-md -mx-6 px-6">
+                <div class="flex gap-4 items-center flex-1">
+                    <div class="relative w-full max-w-md group">
+                        <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"></i>
+                        <input 
+                            type="text" 
+                            id="search-input"
+                            placeholder="What do you want to listen to?" 
+                            class="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] border border-transparent focus:border-white rounded-full py-2 pl-10 pr-4 text-sm outline-none transition-all"
+                        >
+                    </div>
+                </div>
+                <div class="flex gap-4 items-center ml-4">
+                    <div class="hidden sm:flex items-center gap-2 text-xs text-gray-400">
+                        <span class="w-2 h-2 rounded-full bg-green-500"></span> Live API
+                    </div>
+                </div>
+            </header>
+
+            <h1 class="text-3xl font-bold mb-6" id="view-title">Featured Music</h1>
+
+            <!-- Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6" id="track-grid">
+                <!-- Tracks injected here -->
+            </div>
+
+            <!-- Sentinel for Infinite Scroll -->
+            <div id="infinite-scroll-trigger" class="h-20 flex items-center justify-center mt-8">
+                <div id="loading-spinner" class="hidden">
+                    <div class="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Player Bar -->
+    <footer class="h-24 bg-black border-t border-gray-800 flex items-center justify-between px-4 z-20">
+        <div class="w-1/3 flex items-center gap-4">
+            <img id="player-img" src="" class="h-14 w-14 rounded shadow-lg bg-gray-800 object-cover opacity-0 transition-opacity">
+            <div class="hidden md:block overflow-hidden">
+                <h4 id="player-title" class="text-sm font-semibold text-white truncate">Select a track</h4>
+                <p id="player-artist" class="text-xs text-gray-400 truncate">to start</p>
+            </div>
+        </div>
+
+        <div class="w-1/3 flex flex-col items-center">
+            <div class="flex items-center gap-6 mb-1">
+                <button class="text-gray-400 hover:text-white"><i data-lucide="shuffle" class="w-4 h-4"></i></button>
+                <button class="text-gray-400 hover:text-white"><i data-lucide="skip-back" class="w-5 h-5 fill-current"></i></button>
+                <button id="play-pause-btn" class="bg-white text-black rounded-full p-2 w-10 h-10 flex items-center justify-center hover:scale-105 transition">
+                    <i data-lucide="play" class="w-5 h-5 fill-current ml-0.5" id="play-icon"></i>
+                </button>
+                <button class="text-gray-400 hover:text-white"><i data-lucide="skip-forward" class="w-5 h-5 fill-current"></i></button>
+                <button class="text-gray-400 hover:text-white"><i data-lucide="repeat" class="w-4 h-4"></i></button>
+            </div>
+            <div class="w-full flex items-center gap-2 text-xs text-gray-400 font-mono">
+                <span id="current-time">0:00</span>
+                <input type="range" id="progress-bar" value="0" max="100" class="w-full h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                <span id="total-duration">0:00</span>
+            </div>
+        </div>
+
+        <div class="w-1/3 flex justify-end items-center gap-3">
+            <i data-lucide="volume-2" class="w-4 h-4 text-gray-400"></i>
+            <input type="range" id="volume-control" value="80" max="100" class="w-24 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+        </div>
+    </footer>
+
+    <audio id="audio-player"></audio>
+
+    <script>
+        // --- API CONFIG ---
+        const JAMENDO_CLIENT_ID = '12e445c3';
+        const LASTFM_API_KEY = '673f433cbfec3874fdd6598758d7db9c';
+        const RAPID_API_KEY = '73e9e43d67msh967b2d992ac0b23p10ebc0jsndcce5e523c01';
+
+        // --- APP STATE ---
+        let currentAudio = document.getElementById('audio-player');
+        let tracksData = [];
+        let offset = 0;
+        let isFetching = false;
+        let currentQuery = '';
+        let isSearchMode = false;
+
+        // --- DOM ---
+        const grid = document.getElementById('track-grid');
+        const mainScroll = document.getElementById('main-scroll-container');
+        const viewTitle = document.getElementById('view-title');
+        const searchInput = document.getElementById('search-input');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const spinner = document.getElementById('loading-spinner');
+        const progressBar = document.getElementById('progress-bar');
+        const volumeControl = document.getElementById('volume-control');
+
+        // --- INIT ---
+        lucide.createIcons();
+        loadNextPage();
+
+        // --- INFINITE SCROLL LOGIC ---
+        mainScroll.addEventListener('scroll', () => {
+            if (isFetching) return;
+            // If scrolled to within 100px of bottom
+            if (mainScroll.scrollTop + mainScroll.clientHeight >= mainScroll.scrollHeight - 100) {
+                loadNextPage();
+            }
+        });
+
+        // --- DATA FETCHING ---
+        async function loadNextPage() {
+            if (isFetching) return;
+            isFetching = true;
+            spinner.classList.remove('hidden');
+
+            const limit = 20;
+            let url = `https://api.jamendo.com/v3.0/tracks/?client_id=${JAMENDO_CLIENT_ID}&format=jsonpretty&limit=${limit}&offset=${offset}&imagesize=600`;
+            
+            if (isSearchMode) {
+                url += `&search=${encodeURIComponent(currentQuery)}`;
+            } else {
+                url += `&boost=popularity_month`;
+            }
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const startIndex = tracksData.length;
+                    tracksData = [...tracksData, ...data.results];
+                    renderNewTracks(data.results, startIndex);
+                    offset += limit;
+                }
+            } catch (err) {
+                console.error("API Error:", err);
+            } finally {
+                isFetching = false;
+                spinner.classList.add('hidden');
+            }
+        }
+
+        function resetToHome() {
+            isSearchMode = false;
+            currentQuery = '';
+            offset = 0;
+            tracksData = [];
+            grid.innerHTML = '';
+            viewTitle.textContent = "Featured Music";
+            loadNextPage();
+        }
+
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && searchInput.value.trim() !== '') {
+                isSearchMode = true;
+                currentQuery = searchInput.value.trim();
+                offset = 0;
+                tracksData = [];
+                grid.innerHTML = '';
+                viewTitle.textContent = `Search results for "${currentQuery}"`;
+                loadNextPage();
+            }
+        });
+
+        // --- RENDER ---
+        function renderNewTracks(newTracks, startIndex) {
+            newTracks.forEach((track, idx) => {
+                const trackIndex = startIndex + idx;
+                const card = document.createElement('div');
+                card.className = "bg-[#181818] p-4 rounded-md hover:bg-[#282828] transition duration-300 group cursor-pointer flex flex-col gap-3";
+                card.onclick = () => playTrack(trackIndex);
+
+                card.innerHTML = `
+                    <div class="relative w-full aspect-square bg-gray-800 rounded shadow-lg overflow-hidden">
+                        <img src="${track.image}" alt="${track.name}" class="w-full h-full object-cover">
+                        <div class="absolute bottom-2 right-2 bg-[#1DB954] text-black rounded-full p-3 shadow-xl opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300 flex items-center justify-center hover:scale-105">
+                            <i data-lucide="play" class="w-5 h-5 fill-black"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-white text-sm truncate mb-1">${track.name}</h3>
+                        <p class="text-xs text-gray-400 truncate">${track.artist_name}</p>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+            lucide.createIcons();
+        }
+
+        // --- PLAYER LOGIC ---
+        function playTrack(index) {
+            const track = tracksData[index];
+            if(!track) return;
+
+            currentAudio.src = track.audio;
+            currentAudio.play();
+            
+            // UI
+            document.getElementById('player-title').textContent = track.name;
+            document.getElementById('player-artist').textContent = track.artist_name;
+            const pImg = document.getElementById('player-img');
+            pImg.src = track.image;
+            pImg.classList.remove('opacity-0');
+            
+            updatePlayIcon(true);
+            fetchArtistInfo(track.artist_name);
+        }
+
+        async function fetchArtistInfo(artistName) {
+            const container = document.getElementById('artist-bio-container');
+            const bioText = document.getElementById('artist-bio-text');
+            const tags = document.getElementById('artist-tags');
+
+            container.classList.remove('hidden');
+            bioText.textContent = "Loading Artist Bio...";
+            tags.innerHTML = "";
+
+            const url = `https://ws.audioscrobbler.com/2.0/?method=artist.getinfo&artist=${encodeURIComponent(artistName)}&api_key=${LASTFM_API_KEY}&format=json`;
+
+            try {
+                const res = await fetch(url);
+                const data = await res.json();
+                if (data.artist) {
+                    bioText.innerHTML = (data.artist.bio?.summary || "No bio available.").split('<a href')[0];
+                    if (data.artist.tags?.tag) {
+                        const t = Array.isArray(data.artist.tags.tag) ? data.artist.tags.tag : [data.artist.tags.tag];
+                        t.slice(0, 3).forEach(tag => {
+                            const b = document.createElement('span');
+                            b.className = "text-[10px] bg-gray-800 text-gray-400 px-2 py-1 rounded border border-gray-700 uppercase";
+                            b.textContent = tag.name;
+                            tags.appendChild(b);
+                        });
+                    }
+                }
+            } catch(e) { bioText.textContent = "Bio unavailable."; }
+        }
+
+        playPauseBtn.onclick = () => {
+            if (!currentAudio.src) return;
+            if (currentAudio.paused) {
+                currentAudio.play();
+                updatePlayIcon(true);
+            } else {
+                currentAudio.pause();
+                updatePlayIcon(false);
+            }
+        };
+
+        function updatePlayIcon(playing) {
+            const icon = playing ? 'pause' : 'play';
+            document.getElementById('play-icon').outerHTML = `<i data-lucide="${icon}" class="w-5 h-5 fill-current ${icon === 'play' ? 'ml-0.5' : ''}" id="play-icon"></i>`;
+            lucide.createIcons();
+        }
+
+        // --- TIME & VOLUME ---
+        currentAudio.ontimeupdate = () => {
+            const { currentTime, duration } = currentAudio;
+            if (isNaN(duration)) return;
+            progressBar.value = (currentTime / duration) * 100;
+            document.getElementById('current-time').textContent = formatTime(currentTime);
+            document.getElementById('total-duration').textContent = formatTime(duration);
+        };
+
+        progressBar.oninput = (e) => {
+            if (!isNaN(currentAudio.duration)) {
+                currentAudio.currentTime = (e.target.value / 100) * currentAudio.duration;
+            }
+        };
+
+        volumeControl.oninput = (e) => currentAudio.volume = e.target.value / 100;
+
+        function formatTime(s) {
+            const m = Math.floor(s / 60);
+            const sec = Math.floor(s % 60);
+            return `${m}:${sec < 10 ? '0' + sec : sec}`;
+        }
+    </script>
+</body>
+</html>
