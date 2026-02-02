@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Knowledge | Web-Grounded Research</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap');
+        
+        :root {
+            --nexus-bg: #fdfaf5;
+            --nexus-accent: #da7756;
+            --nexus-text: #3e3c38;
+            --nexus-border: #e8e6e1;
+            --nexus-sidebar: #f4f1ea;
+        }
+
+        body {
+            font-family: 'Public Sans', sans-serif;
+            background-color: var(--nexus-bg);
+            color: var(--nexus-text);
+            overflow-x: hidden;
+            scroll-behavior: smooth;
+        }
+
+        /* --- UI Containers --- */
+        #mainControls {
+            position: fixed;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 100%;
+            max-width: 700px;
+            z-index: 50;
+            transition: all 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+            padding: 0 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Active State - Search Bar at Bottom (Smaller/Mini Mode) */
+        #mainControls.active {
+            top: auto;
+            bottom: 20px;
+            transform: translate(-50%, 0);
+            max-width: 600px; /* Smaller width in active mode */
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border-radius: 99px;
+            padding: 8px 16px;
+            border: 1px solid rgba(218, 119, 86, 0.2);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+        }
+
+        #mainControls.active .input-box {
+            padding: 8px 16px;
+            border: none;
+            box-shadow: none;
+        }
+
+        #mainControls.active #headerText {
+            display: none !important;
+        }
+
+        #headerText {
+            transition: opacity 0.2s ease;
+            text-align: center;
+            margin-bottom: 2.5rem;
+        }
+
+        .input-box {
+            background: white;
+            border: 1px solid var(--nexus-border);
+            box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
+            border-radius: 99px;
+            width: 100%;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        }
+
+        .input-box:focus-within {
+            border-color: var(--nexus-accent);
+            box-shadow: 0 0 0 4px rgba(218, 119, 86, 0.15);
+        }
+
+        /* Settings Toggle */
+        #settingsToggle {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            z-index: 60;
+            width: 44px;
+            height: 44px;
+            background: white;
+            border: 1px solid var(--nexus-border);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8b8680;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+        }
+
+        #settingsToggle:hover {
+            color: var(--nexus-accent);
+            border-color: var(--nexus-accent);
+            transform: rotate(15deg);
+        }
+
+        /* Settings Panel */
+        #settingsPanel {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            width: 320px;
+            background: white;
+            border: 1px solid var(--nexus-border);
+            border-radius: 20px;
+            padding: 20px;
+            z-index: 59;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.08);
+            transform: translateY(-10px);
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+        }
+
+        #settingsPanel.open {
+            transform: translateY(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .settings-group label {
+            display: block;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #8b8680;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .custom-select {
+            width: 100%;
+            background: #fdfaf5;
+            border: 1px solid var(--nexus-border);
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            color: #3e3c38;
+            cursor: pointer;
+            outline: none;
+            margin-bottom: 16px;
+            transition: all 0.2s;
+        }
+        
+        .custom-select:hover { border-color: #d1cdc7; }
+        .custom-select:focus { border-color: var(--nexus-accent); background: white; }
+
+        /* --- Wiki Layout --- */
+        .wiki-artifact {
+            max-width: 800px;
+            margin: 40px auto 160px auto; 
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.6s ease;
+            display: none;
+        }
+
+        .wiki-artifact.visible { display: block; opacity: 1; transform: translateY(0); }
+
+        .wiki-content {
+            font-family: 'Source Serif 4', Georgia, serif;
+            line-height: 1.85;
+            font-size: 1.15rem;
+            color: #1a1a1a;
+        }
+
+        .wiki-content h1 { font-size: 3.2rem; font-weight: 700; margin-bottom: 1.5rem; color: #2d2a26; letter-spacing: -0.03em; line-height: 1.2; }
+        .wiki-content h2 { font-size: 1.8rem; font-weight: 600; margin-top: 3.5rem; margin-bottom: 1.25rem; color: var(--nexus-accent); border-bottom: 1px solid #efece5; padding-bottom: 12px; scroll-margin-top: 100px; }
+        .wiki-content p { margin-bottom: 1.75rem; color: #3e3c38; }
+        
+        /* Bullet points styling for easier reading */
+        .wiki-content ul { margin-bottom: 1.75rem; padding-left: 1.5rem; }
+        .wiki-content li { margin-bottom: 0.75rem; position: relative; }
+        .wiki-content li:before { content: "•"; color: var(--nexus-accent); font-weight: bold; position: absolute; left: -1.5rem; }
+
+        /* Better table of contents spacing */
+        #tocItems {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        #tocItems a.toc-link {
+            padding: 10px 14px;
+            border-radius: 10px;
+            color: #5a5855;
+            text-decoration: none;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #tocItems a.toc-link:hover {
+            background-color: rgba(218, 119, 86, 0.08);
+            color: var(--nexus-accent);
+            border-color: rgba(218, 119, 86, 0.2);
+            transform: translateX(3px);
+        }
+
+        #tocItems a.toc-link:after {
+            content: "→";
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            color: var(--nexus-accent);
+        }
+
+        #tocItems a.toc-link:hover:after {
+            opacity: 1;
+        }
+
+        /* Updated smart links (blue and underlined) */
+        .nexus-smart-link {
+            color: #2563eb;
+            text-decoration: underline;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+
+        .nexus-smart-link:hover {
+            color: #1d4ed8;
+            background-color: rgba(37, 99, 235, 0.08);
+            text-decoration: underline;
+        }
+
+        /* Hide menu button when TOC is expanded */
+        .toc-expanded #menuBtn {
+            display: none !important;
+        }
+
+        /* Mistral Verification Box Modern Styling */
+        .mistral-summary {
+            background: #ffffff;
+            border: 1px solid #e9d5ff;
+            border-radius: 20px;
+            padding: 24px;
+            margin-top: 3rem;
+            box-shadow: 0 10px 30px -5px rgba(124, 58, 237, 0.05);
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .floating-btn {
+            position: fixed;
+            z-index: 110;
+            background: white;
+            border: 1px solid var(--nexus-border);
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8b8680;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+            transition: opacity 0.3s ease, transform 0.2s;
+        }
+        
+        .floating-btn:hover { transform: scale(1.05); color: var(--nexus-accent); }
+        #homeBtn { top: 24px; right: 80px; display: none; } 
+        #menuBtn { top: 24px; left: 24px; display: none; }
+
+        /* Loader */
+        #centralLoader {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 40;
+        }
+
+        .synapse-loader { position: relative; width: 60px; height: 60px; margin-bottom: 20px; }
+        .synapse-dot {
+            position: absolute; width: 14px; height: 14px;
+            background-color: var(--nexus-accent);
+            border-radius: 50%;
+            animation: synapsePulse 1.4s infinite ease-in-out;
+        }
+        .synapse-dot:nth-child(1) { top: 0; left: 23px; animation-delay: 0s; }
+        .synapse-dot:nth-child(2) { top: 23px; left: 46px; animation-delay: 0.2s; }
+        .synapse-dot:nth-child(3) { top: 46px; left: 23px; animation-delay: 0.4s; }
+        .synapse-dot:nth-child(4) { top: 23px; left: 0; animation-delay: 0.6s; }
+
+        @keyframes synapsePulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(0.4); opacity: 0.3; }
+        }
+
+        #historyGrid { transition: opacity 0.3s ease; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div id="homeBtn" class="floating-btn" onclick="goHome()" title="Home"><i class="fa-solid fa-house"></i></div>
+    <div id="menuBtn" class="floating-btn" onclick="toggleTOC()" title="Outline"><i class="fa-solid fa-list-ul"></i></div>
+    
+    <!-- Settings Toggle -->
+    <div id="settingsToggle" onclick="toggleSettings()" title="Settings">
+        <i class="fa-solid fa-sliders"></i>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-slate-700">Research Config</h3>
+            <i class="fa-solid fa-xmark cursor-pointer text-slate-400 hover:text-slate-600" onclick="toggleSettings()"></i>
+        </div>
+        
+        <div class="settings-group">
+            <label>Research Depth</label>
+            <select id="depthSelect" class="custom-select">
+                <option value="concise">Concise Summary</option>
+                <option value="balanced" selected>Balanced Overview</option>
+                <option value="deep">Deep Dive Analysis</option>
+            </select>
+        </div>
+
+        <div class="settings-group">
+            <label>AI Model</label>
+            <select id="modelSelect" class="custom-select">
+                <option value="gpt-oss-120b" selected>GPT OSS 120B (Default)</option>
+                <option value="llama-3.3-70b-versatile">Llama 3.3 70B</option>
+                <option value="qwen-2.5-32b">Qwen 2.5 32B (Compound Search)</option>
+                <option value="mixtral-8x7b-32768">Mixtral 8x7b</option>
+                <option value="llama-3.1-8b-instant">Llama 3.1 8B</option>
+            </select>
+        </div>
+        
+        <p class="text-[10px] text-slate-400 mt-2 italic">Models optimized for safe, grounded research.</p>
+    </div>
+
+    <!-- Sidebar TOC -->
+    <div id="tocSidebar" class="fixed top-0 left-[-280px] w-[260px] h-full bg-[#fbf9f6] border-r border-[#e8e6e1] p-8 z-[100] transition-all duration-500">
+        <div class="flex justify-between items-center mb-6">
+            <div class="text-[0.7rem] uppercase tracking-widest font-bold text-slate-400">Outline</div>
+            <button onclick="toggleTOC()" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="tocItems"></div>
+    </div>
+
+    <!-- Loader -->
+    <div id="centralLoader">
+        <div class="synapse-loader">
+            <div class="synapse-dot"></div>
+            <div class="synapse-dot"></div>
+            <div class="synapse-dot"></div>
+            <div class="synapse-dot"></div>
+        </div>
+        <span class="text-xs font-bold uppercase tracking-widest text-[#da7756] animate-pulse">Scanning Nexus...</span>
+    </div>
+
+    <!-- Main Controls -->
+    <div id="mainControls">
+        <div id="headerText">
+            <h1 class="text-4xl md:text-5xl font-bold mb-3 text-[#2d2a26]" style="font-family: 'Source Serif 4', serif; letter-spacing: -0.03em;">What are we exploring?</h1>
+            <p class="text-[#8b8680] font-medium">Type a topic to generate a structured encyclopedia page.</p>
+        </div>
+
+        <div class="input-box flex items-center px-6 py-4">
+            <i class="fa-solid fa-magnifying-glass text-[#d1cdc7] mr-4 text-xl"></i>
+            <input type="text" id="promptInput" 
+                class="flex-1 bg-transparent outline-none text-lg text-[#3e3c38] placeholder-[#d1cdc7] font-medium"
+                placeholder=""
+                onkeypress="if(event.key === 'Enter') generateWiki()">
+            <button onclick="generateWiki()" class="ml-4 w-12 h-12 flex items-center justify-center rounded-full bg-[#f4f1ea] hover:bg-[#da7756] hover:text-white text-[#d1cdc7] transition-all duration-300">
+                <i class="fa-solid fa-arrow-right text-lg" id="btnIcon"></i>
+            </button>
+        </div>
+
+        <div id="historySection">
+            <div class="text-center mt-12 mb-6">
+                <span class="text-xs font-bold uppercase tracking-widest text-[#8b8680]">Recent Research</span>
+            </div>
+            <div id="historyGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full"></div>
+        </div>
+    </div>
+
+    <!-- Content Area -->
+    <div id="wikiContainer" class="wiki-artifact">
+        <div id="wikiContent" class="wiki-content bg-white p-10 md:p-16 rounded-3xl shadow-sm border border-[#e8e6e1]">
+            <!-- Content -->
+        </div>
+
+        <!-- Improved Mistral UI -->
+        <div id="verificationContainer" class="mt-8 px-4 no-print">
+            <button id="verifyBtn" onclick="runMistralSummary()" class="w-full flex items-center justify-center gap-3 py-5 bg-white border-2 border-dashed border-purple-100 rounded-2xl text-purple-600 font-bold hover:bg-purple-50 hover:border-purple-300 transition-all group">
+                <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center group-hover:bg-purple-200">
+                    <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+                </div>
+                <span>Verify Facts with Mistral AI</span>
+            </button>
+            <div id="mistralSummaryArea"></div>
+        </div>
+
+        <div class="flex justify-center gap-3 mt-12 mb-20 no-print">
+            <button onclick="copyToClipboard()" class="px-6 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-50">Copy</button>
+            <button onclick="window.print()" class="px-6 py-2.5 bg-[#2d2a26] text-white rounded-xl text-sm font-bold hover:bg-black">Export PDF</button>
+        </div>
+    </div>
+
+    <script>
+        const GROQ_API_KEY = "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";
+        const MISTRAL_API_KEY = "FT03yFBEWRjW1sfGOnmqdmGSdiqw2KFs";
+        const MISTRAL_AGENT_ID = "ag_019bfb7cb7597665b81f3f2418b755cd";
+
+        let currentWikiData = { topic: '', text: '' };
+        let wikiHistory = JSON.parse(localStorage.getItem('nexus_history_v4') || '[]');
+        const examples = ["Apollo 11 Mission", "Marine Biology", "The Pyramids of Giza", "Sustainable Energy", "Virtual Reality History"];
+        let exIdx = 0, charIdx = 0, isDeleting = false, typeTimeout;
+
+        window.onload = () => {
+            renderHistoryGrid();
+            typeEffect();
+        };
+
+        function typeEffect() {
+            const currentText = examples[exIdx];
+            const input = document.getElementById('promptInput');
+            if (input.value !== '') { setTimeout(typeEffect, 2000); return; }
+
+            if (isDeleting) { input.placeholder = currentText.substring(0, charIdx - 1); charIdx--; }
+            else { input.placeholder = currentText.substring(0, charIdx + 1); charIdx++; }
+
+            if (!isDeleting && charIdx === currentText.length) { isDeleting = true; typeTimeout = setTimeout(typeEffect, 2000); }
+            else if (isDeleting && charIdx === 0) { isDeleting = false; exIdx = (exIdx + 1) % examples.length; typeTimeout = setTimeout(typeEffect, 500); }
+            else { typeTimeout = setTimeout(typeEffect, isDeleting ? 40 : 80); }
+        }
+
+        function toggleSettings() {
+            const panel = document.getElementById('settingsPanel');
+            panel.classList.toggle('open');
+        }
+
+        async function generateWiki(forceTopic = null) {
+            const topic = forceTopic || document.getElementById('promptInput').value.trim();
+            if (!topic) return;
+
+            const depth = document.getElementById('depthSelect').value;
+            const model = document.getElementById('modelSelect').value;
+
+            // UI Transitions
+            const controls = document.getElementById('mainControls');
+            document.getElementById('settingsPanel').classList.remove('open');
+            document.getElementById('settingsToggle').style.display = 'none';
+            controls.classList.add('active');
+            document.getElementById('wikiContainer').classList.remove('visible');
+            document.getElementById('historySection').classList.add('hidden');
+            document.getElementById('centralLoader').style.display = 'flex';
+            document.getElementById('mistralSummaryArea').innerHTML = '';
+            
+            const vBtn = document.getElementById('verifyBtn');
+            vBtn.style.display = 'flex';
+            vBtn.disabled = false;
+            vBtn.innerHTML = `<div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center"><i class="fa-solid fa-wand-magic-sparkles text-sm"></i></div><span>Verify Facts with Mistral AI</span>`;
+
+            // Get Groq model name based on selection
+            let groqModel;
+            switch(model) {
+                case 'gpt-oss-120b':
+                    groqModel = 'openai/gpt-oss-120b';
+                    break;
+                case 'llama-3.3-70b-versatile':
+                    groqModel = 'llama-3.3-70b-versatile';
+                    break;
+                case 'qwen-2.5-32b':
+                    groqModel = 'qwen-2.5-32b';
+                    break;
+                case 'mixtral-8x7b-32768':
+                    groqModel = 'mixtral-8x7b-32768';
+                    break;
+                case 'llama-3.1-8b-instant':
+                    groqModel = 'llama-3.1-8b-instant';
+                    break;
+                default:
+                    groqModel = 'openai/gpt-oss-120b';
+            }
+
+            // Enhanced prompt for better structure and bullet points
+            const enhancedPrompt = `Create a comprehensive, well-structured educational wiki page about: "${topic}".
+            
+            DEPTH LEVEL: ${depth} (${depth === 'concise' ? 'Focus on key facts' : depth === 'balanced' ? 'Provide balanced coverage' : 'Include comprehensive details'}).
+
+            STRUCTURE REQUIREMENTS:
+            ## Introduction
+            - Clear definition and context
+            - Importance and relevance
+            - Key characteristics
+
+            ## Historical Background
+            - Origins and development timeline
+            - Key historical milestones
+            - Important figures or events
+
+            ## Major Concepts/Components
+            - Break down main elements
+            - Explain key principles
+            - Use bullet points for clarity
+
+            ## Applications/Impact
+            - Real-world applications
+            - Global significance
+            - Future implications
+
+            ## Summary & Key Takeaways
+            - Concise summary
+            - 3-5 key bullet points
+            - Further reading suggestions
+
+            STYLE GUIDELINES:
+            1. Use clear, academic yet accessible language
+            2. Include bullet points (•) for lists and key information
+            3. Bold important terms like **this** for emphasis
+            4. Keep paragraphs concise (3-5 sentences max)
+            5. Use subheadings (###) for subsections
+            6. Ensure logical flow between sections
+            7. Include practical examples where relevant
+            8. Avoid markdown citations or reference brackets
+
+            CONTENT GUIDELINES:
+            - Focus on safe, age-appropriate educational content
+            - Maintain factual accuracy and neutrality
+            - Highlight connections to broader knowledge areas
+            - Explain complex concepts in simple terms
+            - Include comparative analysis where helpful`;
+
+            try {
+                const response = await fetchWithRetry("https://api.groq.com/openai/v1/chat/completions", {
+                    method: "POST",
+                    headers: { 
+                        "Authorization": `Bearer ${GROQ_API_KEY}`, 
+                        "Content-Type": "application/json" 
+                    },
+                    body: JSON.stringify({
+                        model: groqModel,
+                        messages: [{ 
+                            role: "user", 
+                            content: enhancedPrompt
+                        }],
+                        temperature: 0.7,
+                        max_tokens: 4000
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.error) throw new Error(data.error.message);
+
+                const fullText = data.choices?.[0]?.message?.content || "Information gathering incomplete.";
+                currentWikiData = { topic, text: fullText };
+                renderWiki(fullText);
+                saveHistory(topic, fullText);
+                
+            } catch (err) {
+                document.getElementById('wikiContent').innerHTML = `<p class="text-red-500 font-bold">Nexus Error: ${err.message}</p><p class="text-slate-500 mt-2">The AI is currently calibrating. Please try a different model or check back in a moment.</p>`;
+                document.getElementById('wikiContainer').classList.add('visible');
+            } finally {
+                document.getElementById('centralLoader').style.display = 'none';
+            }
+        }
+
+        async function runMistralSummary() {
+            const btn = document.getElementById('verifyBtn');
+            const area = document.getElementById('mistralSummaryArea');
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> Mistral is cross-referencing facts...`;
+            btn.disabled = true;
+
+            try {
+                const response = await fetchWithRetry("https://api.mistral.ai/v1/agents/completions", {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${MISTRAL_API_KEY}`, "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        agent_id: MISTRAL_AGENT_ID,
+                        messages: [{ 
+                            role: "user", 
+                            content: `Act as a fact-checker. Review this wiki text for accuracy and provide a clear, concise summary with 3 major takeaways. Text: ${currentWikiData.text.substring(0, 3000)}` 
+                        }]
+                    })
+                });
+                const data = await response.json();
+                const result = data.choices?.[0]?.message?.content || "Cross-reference unavailable.";
+                
+                area.innerHTML = `
+                    <div class="mistral-summary">
+                        <div class="flex items-center justify-between mb-6">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white shadow-lg shadow-purple-200">
+                                    <i class="fa-solid fa-shield-check"></i>
+                                </div>
+                                <div>
+                                    <div class="text-purple-900 font-bold leading-none">Mistral Fact-Check</div>
+                                    <div class="text-[10px] text-purple-400 font-bold uppercase tracking-widest mt-1">Verified Research</div>
+                                </div>
+                            </div>
+                            <div class="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-bold rounded-full border border-green-100">STABLE DATA</div>
+                        </div>
+                        <div class="prose prose-purple prose-sm max-w-none text-slate-600 leading-relaxed">
+                            ${formatMarkdown(result)}
+                        </div>
+                    </div>
+                `;
+                btn.style.display = 'none';
+            } catch (err) {
+                area.innerHTML = `<p class="text-red-400 text-sm mt-4">Verification Timeout: ${err.message}</p>`;
+                btn.innerHTML = `Retry Verification`;
+                btn.disabled = false;
+            }
+        }
+
+        function renderWiki(md) {
+            const container = document.getElementById('wikiContent');
+            const toc = document.getElementById('tocItems');
+            toc.innerHTML = '';
+            
+            let cleanMD = md.replace(/【.*?】/g, '').replace(/\[\d+\]/g, '');
+
+            // Process markdown with enhanced formatting
+            let html = cleanMD
+                .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+                .replace(/^## (.*$)/gim, (match, title) => {
+                    const id = title.toLowerCase().replace(/[^\w]/g, '-');
+                    toc.innerHTML += `<a href="#${id}" class="toc-link" onclick="event.preventDefault(); document.getElementById('${id}').scrollIntoView({behavior: 'smooth'});">${title}</a>`;
+                    return `<h2 id="${id}">${title}</h2>`;
+                })
+                .replace(/^### (.*$)/gim, '<h3>$1</h3>')
+                .replace(/\*\*(.*?)\*\*/g, '<span class="nexus-smart-link" onclick="handleSmartLink(\'$1\')">$1</span>')
+                .replace(/^\s*[-•*]\s+(.*$)/gim, '<li>$1</li>')
+                .split('\n\n').map(p => {
+                    p = p.trim();
+                    if (p.startsWith('<h') || p.startsWith('<li') || p === '') {
+                        return p;
+                    } else {
+                        // Handle inline lists
+                        if (p.includes('- ') && !p.startsWith('<')) {
+                            p = p.replace(/^(- .*)$/gm, '<li>$1</li>');
+                            p = p.replace(/<li>- (.*?)<\/li>/g, '<li>$1</li>');
+                            return p.includes('<li>') ? `<ul>${p}</ul>` : `<p>${p}</p>`;
+                        }
+                        return `<p>${p}</p>`;
+                    }
+                }).join('');
+
+            container.innerHTML = html;
+            document.getElementById('wikiContainer').classList.add('visible');
+            document.getElementById('homeBtn').style.display = 'flex';
+            document.getElementById('menuBtn').style.display = 'flex';
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
+        function handleSmartLink(term) {
+            document.getElementById('promptInput').value = term;
+            generateWiki(term);
+        }
+
+        function formatMarkdown(md) {
+            return md
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/^\s*[-•*]\s+(.*$)/gim, '<li>$1</li>')
+                .replace(/\n/g, '<br>');
+        }
+
+        async function fetchWithRetry(url, options, retries = 5, backoff = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const res = await fetch(url, options);
+                    if (!res.ok) throw new Error(`Status ${res.status}`);
+                    return res;
+                } catch (err) {
+                    if (i === retries - 1) throw err;
+                    await new Promise(r => setTimeout(r, backoff * Math.pow(2, i)));
+                }
+            }
+        }
+
+        function saveHistory(topic, text) {
+            const historyItem = { 
+                topic, 
+                text, 
+                date: new Date().toLocaleDateString('en-US', { 
+                    month: 'short', 
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }),
+                timestamp: Date.now()
+            };
+            
+            // Remove duplicates and keep only 8 most recent
+            wikiHistory = wikiHistory.filter(h => h.topic !== topic);
+            wikiHistory.unshift(historyItem);
+            wikiHistory = wikiHistory.slice(0, 8);
+            
+            localStorage.setItem('nexus_history_v4', JSON.stringify(wikiHistory));
+            renderHistoryGrid();
+        }
+
+        function renderHistoryGrid() {
+            const grid = document.getElementById('historyGrid');
+            grid.innerHTML = '';
+            
+            if (wikiHistory.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-2 text-center py-8 text-slate-400">
+                        <i class="fa-solid fa-clock-rotate-left text-2xl mb-2"></i>
+                        <p class="text-sm">No research history yet</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            wikiHistory.forEach(h => {
+                const card = document.createElement('div');
+                card.className = 'history-card flex items-center gap-4 bg-white border border-[#e8e6e1] p-4 rounded-2xl cursor-pointer hover:border-[#da7756] hover:-translate-y-1 transition-all duration-300';
+                card.innerHTML = `
+                    <div class="w-10 h-10 rounded-full bg-[#f4f1ea] flex items-center justify-center text-[#da7756]">
+                        <i class="fa-solid fa-book-open text-xs"></i>
+                    </div>
+                    <div class="flex-1 overflow-hidden">
+                        <div class="truncate font-semibold text-sm text-[#3e3c38]">${h.topic}</div>
+                        <div class="text-[9px] text-[#8b8680] uppercase font-bold tracking-widest mt-1">${h.date}</div>
+                    </div>
+                    <button onclick="event.stopPropagation(); refreshResearch('${h.topic}')" class="w-8 h-8 rounded-full bg-[#f4f1ea] hover:bg-[#da7756] hover:text-white flex items-center justify-center text-[#8b8680] transition-all" title="Refresh research">
+                        <i class="fa-solid fa-rotate-right text-xs"></i>
+                    </button>
+                `;
+                card.onclick = () => {
+                    document.getElementById('promptInput').value = h.topic;
+                    currentWikiData = h;
+                    document.getElementById('mainControls').classList.add('active');
+                    document.getElementById('historySection').classList.add('hidden');
+                    document.getElementById('settingsToggle').style.display = 'none';
+                    renderWiki(h.text);
+                };
+                grid.appendChild(card);
+            });
+        }
+
+        function refreshResearch(topic) {
+            event.stopPropagation();
+            document.getElementById('promptInput').value = topic;
+            generateWiki(topic);
+        }
+
+        function toggleTOC() {
+            const sidebar = document.getElementById('tocSidebar');
+            const isExpanded = !sidebar.classList.contains('left-[-280px]');
+            
+            if (isExpanded) {
+                sidebar.classList.remove('left-0');
+                sidebar.classList.add('left-[-280px]');
+                document.body.classList.remove('toc-expanded');
+            } else {
+                sidebar.classList.remove('left-[-280px]');
+                sidebar.classList.add('left-0');
+                document.body.classList.add('toc-expanded');
+            }
+        }
+
+        function goHome() {
+            document.getElementById('mainControls').classList.remove('active');
+            document.getElementById('headerText').style.display = 'block';
+            document.getElementById('settingsToggle').style.display = 'flex';
+            document.getElementById('historySection').classList.remove('hidden');
+            document.getElementById('wikiContainer').classList.remove('visible');
+            document.getElementById('homeBtn').style.display = 'none';
+            document.getElementById('menuBtn').style.display = 'none';
+            document.getElementById('promptInput').value = '';
+            document.body.classList.remove('toc-expanded');
+            document.getElementById('tocSidebar').classList.remove('left-0');
+            document.getElementById('tocSidebar').classList.add('left-[-280px]');
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
+        function copyToClipboard() {
+            navigator.clipboard.writeText(currentWikiData.text).then(() => {
+                alert('Content copied to clipboard!');
+            });
+        }
+    </script>
+</body>
+</html>
