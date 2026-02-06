@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pinyin Converter</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#ffffff">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="Pinyin">
+    <meta name="description" content="Minimalist Hanzi to Pinyin converter">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1691/1691956.png"> 
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Pinyin-pro library -->
+    <script src="https://unpkg.com/pinyin-pro"></script>
+    <!-- Font Awesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Merriweather', 'serif'],
+                    },
+                    colors: {
+                        primary: '#d97757', 
+                        stone: {
+                            50: '#fafaf9',
+                            100: '#f5f5f4',
+                            200: '#e7e5e4',
+                            800: '#292524',
+                            900: '#1c1917',
+                        }
+                    },
+                    animation: {
+                        'spin-slow': 'spin 1.5s linear infinite',
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'border-flow': 'borderFlow 2s linear infinite',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(10px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        borderFlow: {
+                            '0%': { backgroundPosition: '0% 50%' },
+                            '50%': { backgroundPosition: '100% 50%' },
+                            '100%': { backgroundPosition: '0% 50%' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #fcfcfb;
+            color: #333;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Hide scrollbar for clean UI but allow scroll */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        /* Ruby text styling dynamic variables */
+        ruby {
+            display: inline-flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            margin: 0 var(--ruby-spacing, 2px);
+            vertical-align: bottom;
+            line-height: 1.6;
+        }
+        rt {
+            display: block;
+            font-size: 0.6em;
+            line-height: 1.2;
+            color: var(--pinyin-color, #d97757);
+            margin-bottom: 2px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            user-select: none;
+        }
+        
+        /* Dynamic color class for non-ruby pinyin */
+        .pinyin-text {
+            color: var(--pinyin-color, #d97757);
+        }
+
+        /* Character color class */
+        .character-text {
+            color: var(--character-color, #292524);
+        }
+
+        /* Loader */
+        .loader {
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #d97757;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Thin border animation for input */
+        .thin-border-animation {
+            position: relative;
+            border-radius: 16px;
+        }
+
+        .thin-border-animation::before {
+            content: '';
+            position: absolute;
+            top: -1px;
+            left: -1px;
+            right: -1px;
+            bottom: -1px;
+            border-radius: 17px;
+            background: linear-gradient(90deg, #ff6b35, #ffa500, #ffd166, #ffa500, #ff6b35);
+            background-size: 300% 300%;
+            animation: borderFlow 2s linear infinite;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .thin-border-animation::after {
+            content: '';
+            position: absolute;
+            top: 1px;
+            left: 1px;
+            right: 1px;
+            bottom: 1px;
+            border-radius: 15px;
+            background: white;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .thin-border-animation > * {
+            position: relative;
+            z-index: 2;
+        }
+        
+        /* Translator Styles */
+        .translator-root {
+            --bg-color: #f9f8f6;
+            --card-bg: #ffffff;
+            --text-main: #212121;
+            --text-muted: #6b6b6b;
+            --border-color: #e5e5e5;
+            --accent-color: #d97757;
+            --button-bg: #1a1a1a;
+            --button-hover: #333333;
+        }
+
+        .translator-container * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        
+        .translator-body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.5;
+            padding: 20px;
+            min-height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .translator-header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .translator-h1 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+        
+        .translator-subtitle {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+        
+        .translator-layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        
+        @media (min-width: 768px) {
+            .translator-layout {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        
+        .translator-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.2s;
+        }
+        
+        .translator-card:focus-within {
+            border-color: #b0b0b0;
+        }
+        
+        .translator-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .translator-textarea {
+            width: 100%;
+            height: 180px;
+            border: none;
+            font-size: 1rem;
+            resize: none;
+            color: var(--text-main);
+            outline: none;
+            background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .translator-output {
+            height: 180px;
+            font-size: 1rem;
+            color: var(--text-main);
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.5;
+        }
+
+        .translator-output.placeholder {
+            color: #b0b0b0;
+        }
+        
+        .translator-controls {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 10px;
+        }
+        
+        .translator-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        
+        .translator-primary {
+            background-color: var(--button-bg);
+            color: white;
+        }
+        
+        .translator-primary:hover {
+            background-color: var(--button-hover);
+        }
+
+        .translator-primary:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .translator-secondary {
+            background-color: white;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+        }
+        
+        .translator-secondary:hover {
+            background-color: #f5f5f5;
+        }
+
+        .translator-secondary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .translator-status-container {
+            margin-top: 16px;
+            text-align: center;
+            min-height: 24px;
+        }
+
+        .translator-status-message {
+            font-size: 0.8rem;
+            padding: 6px 12px;
+            border-radius: 20px;
+            display: inline-block;
+            transition: opacity 0.3s;
+        }
+
+        .translator-status-info { color: var(--text-muted); }
+        .translator-status-error { color: #d32f2f; background: #fff1f1; border: 1px solid #ffcfcf; }
+        .translator-status-success { color: #2e7d32; background: #f1fff1; border: 1px solid #cfffcf; }
+        
+        .translator-char-count {
+            font-weight: normal;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+        
+        .translator-speaking-active {
+            color: var(--accent-color) !important;
+            border-color: var(--accent-color) !important;
+            background-color: #fff9f7 !important;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-[100dvh] overflow-hidden">
+
+    <!-- Top Bar -->
+    <header class="flex-none px-4 md:px-6 py-4 flex justify-between items-center bg-white/80 backdrop-blur-md z-10 border-b border-stone-100">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-stone-800 flex items-center justify-center text-white font-serif font-bold text-lg">
+                P
+            </div>
+            <h1 class="font-serif text-xl text-stone-900 tracking-tight">Pinyin</h1>
+        </div>
+        
+        <div class="flex items-center gap-2">
+            <!-- History Button -->
+            <button onclick="toggleHistory()" class="flex items-center gap-2 px-3 py-2 bg-stone-50 hover:bg-stone-100 text-stone-600 rounded-lg text-xs font-semibold transition-colors mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 3"/></svg>
+                <span class="hidden sm:inline">History</span>
+                <span class="sm:hidden">Hist</span>
+            </button>
+
+            <!-- Voice Memos Button -->
+            <button onclick="openVoiceMemos()" class="flex items-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg text-xs font-semibold transition-colors mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+                <span class="hidden sm:inline">Voice</span>
+            </button>
+
+            <!-- Google Docs Button -->
+            <button onclick="openGoogleDocs()" class="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-semibold transition-colors mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                <span class="hidden sm:inline">Docs</span>
+            </button>
+
+            <!-- Translator Button -->
+            <button onclick="openTranslator()" class="flex items-center gap-2 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-lg text-xs font-semibold transition-colors mr-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 8l6 6"></path>
+                    <path d="M4 14l6-6 2-3"></path>
+                    <path d="M2 5h12"></path>
+                    <path d="M7 2h1"></path>
+                    <path d="m22 22-5-10-5 10"></path>
+                    <path d="M14 18h6"></path>
+                </svg>
+                <span class="hidden sm:inline">Translate</span>
+            </button>
+
+            <!-- Settings Button -->
+            <button onclick="toggleSettings()" class="p-2 rounded-full hover:bg-stone-100 transition-colors text-stone-600 active:scale-95">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content (Scrollable) -->
+    <main class="flex-grow flex flex-col md:flex-row gap-0 md:gap-6 p-4 md:p-8 max-w-6xl mx-auto w-full overflow-hidden">
+        
+        <!-- Input Section -->
+        <div id="inputContainer" class="flex-1 flex flex-col h-1/2 md:h-full bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden transition-all">
+            <div class="px-4 py-3 border-b border-stone-50 bg-stone-50/50 flex justify-between items-center">
+                <label class="text-xs font-semibold text-stone-500 uppercase tracking-wider">Input</label>
+                <button onclick="clearInput()" class="text-stone-400 hover:text-stone-600 text-xs font-medium transition-colors">Clear</button>
+            </div>
+            <textarea id="inputText" class="flex-grow w-full p-4 md:p-6 text-lg md:text-xl text-stone-800 placeholder-stone-300 resize-none outline-none font-serif leading-relaxed no-scrollbar bg-transparent" placeholder="Type or paste Chinese characters here..."></textarea>
+        </div>
+
+        <!-- Divider / Action (Mobile) -->
+        <div class="flex-none py-2 md:py-0 md:px-2 flex items-center justify-center">
+            <button onclick="runConversion()" class="group bg-stone-800 text-white rounded-full p-3 shadow-lg hover:shadow-xl hover:bg-stone-700 hover:scale-105 active:scale-95 transition-all duration-200 z-20">
+                 <!-- Run Icon -->
+                 <svg id="runIcon" class="w-6 h-6 group-hover:rotate-90 transition-transform duration-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                 <!-- Loading Spinner (Hidden by default) -->
+                 <div id="loadingSpinner" class="hidden w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            </button>
+        </div>
+
+        <!-- Output Section -->
+        <div class="flex-1 flex flex-col h-1/2 md:h-full bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden relative">
+            <div class="px-4 py-3 border-b border-stone-50 bg-stone-50/50 flex justify-between items-center">
+                <label class="text-xs font-semibold text-stone-500 uppercase tracking-wider">Result</label>
+                <div class="flex items-center gap-3">
+                    <!-- Listen Button -->
+                    <button id="listenButton" onclick="speakText()" class="flex items-center gap-1 text-stone-400 hover:text-emerald-600 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+                        Listen
+                    </button>
+                    <button onclick="copyOutput()" class="flex items-center gap-1 text-stone-400 hover:text-primary transition-colors text-xs font-medium">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                        Copy
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Output Content -->
+            <div id="outputContainer" class="flex-grow w-full p-4 md:p-6 overflow-y-auto font-serif leading-relaxed no-scrollbar relative">
+                <!-- Placeholder -->
+                <div id="placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-stone-300 pointer-events-none">
+                    <svg class="w-12 h-12 mb-2 opacity-20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" /></svg>
+                    <span class="text-sm font-sans">Ready to translate</span>
+                </div>
+                <!-- Text Display -->
+                <div id="outputDisplay" class="opacity-0 transition-opacity duration-300"></div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Translator Modal -->
+    <div id="translatorModal" class="fixed inset-0 bg-stone-900/20 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-200 flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-4xl rounded-2xl shadow-2xl transform scale-95 transition-transform duration-300 flex flex-col max-h-[90vh]" id="translatorPanel">
+            <div class="flex justify-between items-center p-5 border-b border-stone-100">
+                <h2 class="font-serif text-xl font-bold text-stone-800">English to Chinese Translator</h2>
+                <button onclick="closeTranslator()" class="text-stone-400 hover:text-stone-600 p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-grow translator-root">
+                <!-- Translator content will be loaded here -->
+                <div id="translatorContent" class="min-h-[400px]">
+                    <div class="translator-container">
+                        <div class="translator-header">
+                            <h1 class="translator-h1">English to Chinese</h1>
+                            <p class="translator-subtitle">Direct, high-quality translation</p>
+                        </div>
+                        
+                        <div class="translator-layout">
+                            <div class="translator-card">
+                                <div class="translator-card-header">
+                                    <span>English</span>
+                                    <span class="translator-char-count"><span id="translator-english-count">0</span> chars</span>
+                                </div>
+                                <textarea id="translator-english-text" class="translator-textarea" placeholder="Type or paste text to translate...">Hello, how are you? I am learning Chinese.</textarea>
+                            </div>
+                            
+                            <div class="translator-card">
+                                <div class="translator-card-header">
+                                    <span>Chinese (Simplified)</span>
+                                    <span class="translator-char-count"><span id="translator-chinese-count">0</span> chars</span>
+                                </div>
+                                <div id="translator-chinese-output" class="translator-output placeholder">Translation will appear here...</div>
+                            </div>
+                        </div>
+                        
+                        <div class="translator-controls">
+                            <button id="translator-translate-btn" class="translator-button translator-primary">
+                                <i class="fas fa-arrow-right"></i> Translate
+                            </button>
+                            <button id="translator-speak-btn" class="translator-button translator-secondary">
+                                <i class="fas fa-volume-up"></i> Listen
+                            </button>
+                            <button id="translator-clear-btn" class="translator-button translator-secondary">
+                                Clear
+                            </button>
+                        </div>
+
+                        <div class="translator-status-container">
+                            <div id="translator-status" class="translator-status-message translator-status-info">Ready to translate</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="historyModal" class="fixed inset-0 bg-stone-900/20 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-200 flex items-end md:items-center justify-center sm:p-4">
+        <div class="bg-white w-full max-w-lg md:rounded-2xl rounded-t-2xl shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col max-h-[90vh]" id="historyPanel">
+            <div class="flex justify-between items-center p-5 border-b border-stone-100">
+                <h2 class="font-serif text-xl font-bold text-stone-800">Translation History</h2>
+                <button onclick="toggleHistory()" class="text-stone-400 hover:text-stone-600 p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+            <div class="p-4 overflow-y-auto">
+                <div id="historyList" class="space-y-3">
+                    <!-- History items will be loaded here -->
+                </div>
+                <div id="emptyHistory" class="text-center py-8 text-stone-400">
+                    <svg class="w-12 h-12 mx-auto mb-2 opacity-20" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <span class="text-sm">No translation history yet</span>
+                </div>
+            </div>
+            <div class="p-4 border-t border-stone-100 bg-stone-50 rounded-b-2xl">
+                <button onclick="clearHistory()" class="w-full py-3 border border-stone-300 text-stone-600 font-medium rounded-xl hover:bg-stone-100 transition-colors">Clear All History</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="fixed inset-0 bg-stone-900/20 backdrop-blur-sm z-50 hidden opacity-0 transition-opacity duration-200 flex items-end md:items-center justify-center sm:p-4">
+        <div class="bg-white w-full max-w-sm md:rounded-2xl rounded-t-2xl shadow-2xl transform translate-y-full transition-transform duration-300 flex flex-col max-h-[90vh]" id="settingsPanel">
+            <div class="flex justify-between items-center p-5 border-b border-stone-100">
+                <h2 class="font-serif text-xl font-bold text-stone-800">Settings</h2>
+                <button onclick="toggleSettings()" class="text-stone-400 hover:text-stone-600 p-1">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+
+            <div class="p-6 overflow-y-auto space-y-6">
+                <!-- Format Section -->
+                <div>
+                    <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Output Format</label>
+                    <div class="grid grid-cols-1 gap-2">
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-50 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-50">
+                            <span class="text-stone-700 font-medium">Standard <span class="text-stone-400 font-serif ml-2">wǒ</span></span>
+                            <input type="radio" name="format" value="tone" class="accent-stone-800 w-4 h-4" onchange="saveSettings()">
+                        </label>
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-50 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-50">
+                            <span class="text-stone-700 font-medium">Stacked <span class="text-stone-400 font-serif ml-2">我 [wǒ]</span></span>
+                            <input type="radio" name="format" value="ruby-tone" class="accent-stone-800 w-4 h-4" onchange="saveSettings()">
+                        </label>
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-50 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-50">
+                            <span class="text-stone-700 font-medium">Inline <span class="text-stone-400 font-serif ml-2">我(wǒ)</span></span>
+                            <input type="radio" name="format" value="inline-tone" class="accent-stone-800 w-4 h-4" onchange="saveSettings()">
+                        </label>
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-stone-200 cursor-pointer hover:bg-stone-50 transition-colors has-[:checked]:border-stone-800 has-[:checked]:bg-stone-50">
+                            <span class="text-stone-700 font-medium">Numbers <span class="text-stone-400 font-serif ml-2">wo3</span></span>
+                            <input type="radio" name="format" value="num" class="accent-stone-800 w-4 h-4" onchange="saveSettings()">
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Text Size Section -->
+                <div>
+                    <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Text Size</label>
+                    <div class="flex gap-2">
+                        <button onclick="setFontSize('text-base')" class="flex-1 py-2 border border-stone-200 rounded-lg text-sm hover:bg-stone-50 font-serif" id="size-sm">Aa</button>
+                        <button onclick="setFontSize('text-xl')" class="flex-1 py-2 border border-stone-200 rounded-lg text-lg hover:bg-stone-50 font-serif" id="size-md">Aa</button>
+                        <button onclick="setFontSize('text-3xl')" class="flex-1 py-2 border border-stone-200 rounded-lg text-2xl hover:bg-stone-50 font-serif" id="size-lg">Aa</button>
+                    </div>
+                </div>
+
+                <!-- Character Color Section -->
+                <div>
+                    <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Character Color</label>
+                    <div class="flex gap-3 flex-wrap">
+                        <button onclick="setCharacterColor('#292524')" class="w-8 h-8 rounded-full bg-stone-800 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-black"></button>
+                        <button onclick="setCharacterColor('#d97757')" class="w-8 h-8 rounded-full bg-[#d97757] ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-orange"></button>
+                        <button onclick="setCharacterColor('#0ea5e9')" class="w-8 h-8 rounded-full bg-sky-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-blue"></button>
+                        <button onclick="setCharacterColor('#10b981')" class="w-8 h-8 rounded-full bg-emerald-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-green"></button>
+                        <button onclick="setCharacterColor('#8b5cf6')" class="w-8 h-8 rounded-full bg-violet-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-purple"></button>
+                        <button onclick="setCharacterColor('#ef4444')" class="w-8 h-8 rounded-full bg-red-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-red"></button>
+                        <button onclick="setCharacterColor('#f59e0b')" class="w-8 h-8 rounded-full bg-amber-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-amber"></button>
+                        <button onclick="setCharacterColor('#6b7280')" class="w-8 h-8 rounded-full bg-gray-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="char-gray"></button>
+                    </div>
+                </div>
+
+                <!-- Pinyin Color Section -->
+                <div>
+                    <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Pinyin Color</label>
+                    <div class="flex gap-3 flex-wrap">
+                        <button onclick="setToneColor('#d97757')" class="w-8 h-8 rounded-full bg-[#d97757] ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-orange"></button>
+                        <button onclick="setToneColor('#292524')" class="w-8 h-8 rounded-full bg-stone-800 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-black"></button>
+                        <button onclick="setToneColor('#0ea5e9')" class="w-8 h-8 rounded-full bg-sky-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-blue"></button>
+                        <button onclick="setToneColor('#10b981')" class="w-8 h-8 rounded-full bg-emerald-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-green"></button>
+                        <button onclick="setToneColor('#8b5cf6')" class="w-8 h-8 rounded-full bg-violet-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-purple"></button>
+                        <button onclick="setToneColor('#ef4444')" class="w-8 h-8 rounded-full bg-red-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-red"></button>
+                        <button onclick="setToneColor('#f59e0b')" class="w-8 h-8 rounded-full bg-amber-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-amber"></button>
+                        <button onclick="setToneColor('#ec4899')" class="w-8 h-8 rounded-full bg-pink-500 ring-2 ring-offset-2 ring-transparent hover:scale-110 transition-transform" id="color-pink"></button>
+                    </div>
+                </div>
+
+                <!-- Exclude Characters Section -->
+                <div>
+                    <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">Exclude Characters from Pinyin</label>
+                    <div class="space-y-2">
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="excludeInput" maxlength="1" class="flex-1 p-3 border border-stone-200 rounded-lg text-center text-lg font-serif" placeholder="字" onkeyup="handleExcludeInput(event)">
+                            <button onclick="addExcludeCharacter()" class="px-4 py-3 bg-stone-800 text-white rounded-lg hover:bg-stone-700 transition-colors font-medium">Add</button>
+                        </div>
+                        <div class="text-xs text-stone-500 mb-2">Enter a single character to exclude from pinyin conversion</div>
+                        <div id="excludeList" class="min-h-[60px] p-3 border border-stone-200 rounded-lg bg-stone-50">
+                            <!-- Excluded characters will appear here -->
+                        </div>
+                        <div class="text-xs text-stone-500">Excluded characters will appear as plain text without pinyin</div>
+                    </div>
+                </div>
+
+                <!-- History Settings -->
+                <div>
+                    <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-3">History</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-stone-200 hover:bg-stone-50 transition-colors">
+                            <span class="text-stone-700 font-medium">Save translations to history</span>
+                            <input type="checkbox" id="saveHistoryToggle" class="accent-stone-800 w-5 h-5" onchange="toggleHistorySaving()">
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 border-t border-stone-100 bg-stone-50 rounded-b-2xl">
+                <button onclick="toggleSettings()" class="w-full bg-stone-800 text-white font-medium py-3 rounded-xl hover:bg-stone-700 transition-colors">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Buffer -->
+    <textarea id="clipboardBuffer" class="absolute opacity-0 w-0 h-0 pointer-events-none"></textarea>
+    
+    <!-- Toast -->
+    <div id="toast" class="fixed top-6 left-1/2 transform -translate-x-1/2 bg-stone-800 text-white px-5 py-3 rounded-full text-sm shadow-xl opacity-0 transition-all duration-300 pointer-events-none flex items-center gap-2 translate-y-[-20px] z-50">
+        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+        <span id="toastMessage">Copied to clipboard</span>
+    </div>
+
+    <script>
+        // --- State Management ---
+        const { pinyin } = pinyinPro;
+        
+        const state = {
+            fontSize: 'text-xl',
+            toneColor: '#d97757',
+            characterColor: '#292524',
+            format: 'ruby-tone', // default
+            saveHistory: true,
+            history: [],
+            currentOutputText: '',
+            currentChineseText: '',
+            isSpeaking: false,
+            excludedCharacters: []
+        };
+
+        // --- Elements ---
+        const els = {
+            input: document.getElementById('inputText'),
+            inputContainer: document.getElementById('inputContainer'),
+            output: document.getElementById('outputDisplay'),
+            outputContainer: document.getElementById('outputContainer'),
+            placeholder: document.getElementById('placeholder'),
+            buffer: document.getElementById('clipboardBuffer'),
+            toast: document.getElementById('toast'),
+            toastMessage: document.getElementById('toastMessage'),
+            modal: document.getElementById('settingsModal'),
+            panel: document.getElementById('settingsPanel'),
+            historyModal: document.getElementById('historyModal'),
+            historyPanel: document.getElementById('historyPanel'),
+            historyList: document.getElementById('historyList'),
+            emptyHistory: document.getElementById('emptyHistory'),
+            translatorModal: document.getElementById('translatorModal'),
+            translatorPanel: document.getElementById('translatorPanel'),
+            translatorContent: document.getElementById('translatorContent'),
+            runIcon: document.getElementById('runIcon'),
+            spinner: document.getElementById('loadingSpinner'),
+            formatRadios: document.getElementsByName('format'),
+            saveHistoryToggle: document.getElementById('saveHistoryToggle'),
+            listenButton: document.getElementById('listenButton'),
+            excludeInput: document.getElementById('excludeInput'),
+            excludeList: document.getElementById('excludeList')
+        };
+
+        // --- Translator Functions ---
+        function openTranslator() {
+            els.translatorModal.classList.remove('hidden');
+            setTimeout(() => {
+                els.translatorModal.classList.remove('opacity-0');
+                els.translatorPanel.classList.remove('scale-95');
+            }, 10);
+            
+            // Initialize translator functionality
+            setTimeout(initTranslator, 100);
+        }
+
+        function initTranslator() {
+            const englishTextarea = document.getElementById('translator-english-text');
+            const chineseOutput = document.getElementById('translator-chinese-output');
+            const translateBtn = document.getElementById('translator-translate-btn');
+            const clearBtn = document.getElementById('translator-clear-btn');
+            const speakBtn = document.getElementById('translator-speak-btn');
+            const englishCount = document.getElementById('translator-english-count');
+            const chineseCount = document.getElementById('translator-chinese-count');
+            const statusDiv = document.getElementById('translator-status');
+            
+            if (!englishTextarea) return;
+            
+            // Initialize counts
+            function updateCharacterCount() {
+                englishCount.textContent = englishTextarea.value.length;
+                const text = chineseOutput.textContent;
+                chineseCount.textContent = (text === "Translation will appear here...") ? "0" : text.length;
+            }
+            
+            function showStatus(message, type = 'info') {
+                statusDiv.textContent = message;
+                statusDiv.className = `translator-status-message translator-status-${type}`;
+                statusDiv.style.opacity = '1';
+                
+                if (type === 'success') {
+                    setTimeout(() => {
+                        if (statusDiv.textContent === message) {
+                            statusDiv.style.opacity = '0.5';
+                        }
+                    }, 3000);
+                }
+            }
+            
+            async function translateText() {
+                const englishText = englishTextarea.value.trim();
+                
+                if (!englishText) {
+                    showStatus('Enter text to translate', 'error');
+                    return;
+                }
+                
+                translateBtn.disabled = true;
+                translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                showStatus('Translating...', 'info');
+                
+                try {
+                    const translatedText = await translateWithFreeAPI(englishText);
+                    
+                    chineseOutput.textContent = translatedText;
+                    chineseOutput.classList.remove('placeholder');
+                    updateCharacterCount();
+                    showStatus('Translation complete', 'success');
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    showStatus('Service unavailable. Please try again later.', 'error');
+                } finally {
+                    translateBtn.disabled = false;
+                    translateBtn.innerHTML = '<i class="fas fa-arrow-right"></i> Translate';
+                }
+            }
+            
+            async function translateWithFreeAPI(text) {
+                const encodedText = encodeURIComponent(text);
+                // Using MyMemory API
+                const url = `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=en|zh`;
+                
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('API Error');
+                
+                const data = await response.json();
+                if (data.responseStatus !== 200) throw new Error('Translation Error');
+                
+                return data.responseData.translatedText;
+            }
+            
+            function clearText() {
+                englishTextarea.value = '';
+                chineseOutput.textContent = 'Translation will appear here...';
+                chineseOutput.classList.add('placeholder');
+                updateCharacterCount();
+                englishTextarea.focus();
+                showStatus('Ready', 'info');
+                if ('speechSynthesis' in window) {
+                    window.speechSynthesis.cancel();
+                }
+            }
+            
+            function speakChinese() {
+                const text = chineseOutput.textContent;
+                if (!text || text === 'Translation will appear here...') {
+                    showStatus('Nothing to speak yet', 'error');
+                    return;
+                }
+                
+                if ('speechSynthesis' in window) {
+                    // Cancel any ongoing speech
+                    window.speechSynthesis.cancel();
+
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    
+                    // Try to find a Chinese voice
+                    const voices = window.speechSynthesis.getVoices();
+                    const chineseVoice = voices.find(v => v.lang.includes('zh-CN') || v.lang.includes('zh-HK') || v.lang.includes('zh-TW'));
+                    
+                    if (chineseVoice) {
+                        utterance.voice = chineseVoice;
+                    }
+                    
+                    utterance.lang = 'zh-CN';
+                    utterance.rate = 0.9;
+                    utterance.pitch = 1.0;
+
+                    utterance.onstart = () => {
+                        speakBtn.classList.add('translator-speaking-active');
+                        speakBtn.innerHTML = '<i class="fas fa-stop"></i> Speaking...';
+                    };
+
+                    utterance.onend = () => {
+                        speakBtn.classList.remove('translator-speaking-active');
+                        speakBtn.innerHTML = '<i class="fas fa-volume-up"></i> Listen';
+                    };
+
+                    utterance.onerror = (e) => {
+                        console.error('Speech error:', e);
+                        speakBtn.classList.remove('translator-speaking-active');
+                        speakBtn.innerHTML = '<i class="fas fa-volume-up"></i> Listen';
+                        showStatus('Speech playback failed', 'error');
+                    };
+
+                    window.speechSynthesis.speak(utterance);
+                } else {
+                    showStatus('Voice not supported in this browser', 'error');
+                }
+            }
+
+            // Event listeners
+            translateBtn.addEventListener('click', translateText);
+            clearBtn.addEventListener('click', clearText);
+            speakBtn.addEventListener('click', speakChinese);
+            englishTextarea.addEventListener('input', updateCharacterCount);
+            
+            // Initialize counts
+            updateCharacterCount();
+            
+            // Auto-translate on load
+            setTimeout(translateText, 500);
+        }
+
+        function closeTranslator() {
+            els.translatorModal.classList.add('opacity-0');
+            els.translatorPanel.classList.add('scale-95');
+            setTimeout(() => {
+                els.translatorModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // --- Voice Memos Function ---
+        function openVoiceMemos() {
+            // Try to open Voice Memos app on iOS
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            if (isIOS) {
+                // iOS - try to open Voice Memos app
+                window.location.href = 'voicememos://';
+                
+                // Fallback: If Voice Memos doesn't open, try the Apple Notes voice memos
+                setTimeout(() => {
+                    // If we're still on the page after 1 second, try mobilenotes://
+                    // which might open the Notes app that has voice recording capability
+                    window.location.href = 'mobilenotes://';
+                }, 1000);
+            } else {
+                // For non-iOS devices, show a message
+                showToast('Voice Memos app is only available on iOS devices');
+            }
+        }
+
+        // --- Google Docs Function ---
+        function openGoogleDocs() {
+            // Simple function to open Google Docs app or website
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
+            
+            if (isIOS) {
+                // iOS - try to open Google Docs app
+                window.location.href = 'googledocs://';
+                
+                // Fallback: Open Google Docs website to create new document
+                setTimeout(() => {
+                    window.open('https://docs.google.com/document/create', '_blank');
+                }, 1000);
+            } else if (isAndroid) {
+                // Android - try to open Google Docs app
+                window.location.href = 'intent://docs.google.com/document/create#Intent;package=com.google.android.apps.docs.editors.docs;end';
+                
+                // Fallback: Open Google Docs website
+                setTimeout(() => {
+                    window.open('https://docs.google.com/document/create', '_blank');
+                }, 1000);
+            } else {
+                // Desktop - open Google Docs website to create new document
+                window.open('https://docs.google.com/document/create', '_blank');
+            }
+        }
+
+        // --- Text-to-Speech Function ---
+        function speakText() {
+            if (!state.currentChineseText || state.isSpeaking) return;
+            
+            // Check if browser supports speech synthesis
+            if (!('speechSynthesis' in window)) {
+                showToast('Text-to-speech not supported in this browser');
+                return;
+            }
+            
+            // Stop any ongoing speech
+            speechSynthesis.cancel();
+            
+            // Create a new utterance
+            const utterance = new SpeechSynthesisUtterance(state.currentChineseText);
+            
+            // Set language to Chinese
+            utterance.lang = 'zh-CN';
+            
+            // Set a slower rate for better pronunciation
+            utterance.rate = 0.8;
+            
+            // Set a pleasant pitch
+            utterance.pitch = 1;
+            
+            // Update button state
+            state.isSpeaking = true;
+            els.listenButton.disabled = true;
+            els.listenButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg> Speaking...';
+            
+            // Speak the text
+            speechSynthesis.speak(utterance);
+            
+            // Handle when speech ends
+            utterance.onend = () => {
+                state.isSpeaking = false;
+                els.listenButton.disabled = false;
+                els.listenButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg> Listen';
+            };
+            
+            // Handle errors
+            utterance.onerror = (event) => {
+                console.error('Speech synthesis error:', event);
+                state.isSpeaking = false;
+                els.listenButton.disabled = false;
+                els.listenButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg> Listen';
+                showToast('Speech synthesis failed');
+            };
+        }
+
+        // Helper function to copy text to clipboard
+        function copyToClipboard(text) {
+            return new Promise((resolve, reject) => {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(resolve).catch(reject);
+                } else {
+                    // Fallback for older browsers
+                    els.buffer.value = text;
+                    els.buffer.select();
+                    try {
+                        const successful = document.execCommand('copy');
+                        if (successful) {
+                            resolve();
+                        } else {
+                            reject(new Error('Copy failed'));
+                        }
+                    } catch (err) {
+                        reject(err);
+                    }
+                }
+            });
+        }
+
+        // --- Exclude Characters Functions ---
+        function handleExcludeInput(e) {
+            // Auto-add when Enter is pressed
+            if (e.key === 'Enter') {
+                addExcludeCharacter();
+            }
+            
+            // Limit to one character
+            if (els.excludeInput.value.length > 1) {
+                els.excludeInput.value = els.excludeInput.value.charAt(0);
+            }
+        }
+
+        function addExcludeCharacter() {
+            const char = els.excludeInput.value.trim();
+            
+            if (!char) {
+                showToast('Please enter a character');
+                return;
+            }
+            
+            if (char.length !== 1) {
+                showToast('Please enter only one character');
+                return;
+            }
+            
+            // Check if character is already excluded
+            if (state.excludedCharacters.includes(char)) {
+                showToast('Character already excluded');
+                return;
+            }
+            
+            // Add to excluded characters
+            state.excludedCharacters.push(char);
+            localStorage.setItem('pinyin_excluded_chars', JSON.stringify(state.excludedCharacters));
+            
+            // Clear input
+            els.excludeInput.value = '';
+            
+            // Update display
+            updateExcludeList();
+            
+            // Re-run conversion if there is text
+            if (els.input.value.trim()) {
+                const result = processPinyin(els.input.value.trim());
+                if (result) {
+                    state.currentOutputText = result.copyText;
+                }
+            }
+            
+            showToast(`"${char}" will now appear without pinyin`);
+        }
+
+        function removeExcludeCharacter(char) {
+            state.excludedCharacters = state.excludedCharacters.filter(c => c !== char);
+            localStorage.setItem('pinyin_excluded_chars', JSON.stringify(state.excludedCharacters));
+            
+            // Update display
+            updateExcludeList();
+            
+            // Re-run conversion if there is text
+            if (els.input.value.trim()) {
+                const result = processPinyin(els.input.value.trim());
+                if (result) {
+                    state.currentOutputText = result.copyText;
+                }
+            }
+            
+            showToast(`"${char}" will now show pinyin`);
+        }
+
+        function updateExcludeList() {
+            els.excludeList.innerHTML = '';
+            
+            if (state.excludedCharacters.length === 0) {
+                els.excludeList.innerHTML = '<div class="text-center text-stone-400 py-3">No characters excluded</div>';
+                return;
+            }
+            
+            // Create a grid of excluded characters
+            const container = document.createElement('div');
+            container.className = 'grid grid-cols-4 sm:grid-cols-6 gap-2';
+            
+            state.excludedCharacters.forEach(char => {
+                const charDiv = document.createElement('div');
+                charDiv.className = 'relative group';
+                charDiv.innerHTML = `
+                    <div class="aspect-square bg-white border border-stone-300 rounded-lg flex items-center justify-center text-lg font-serif hover:bg-stone-50 transition-colors">
+                        ${char}
+                    </div>
+                    <button onclick="removeExcludeCharacter('${char}')" class="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        ×
+                    </button>
+                `;
+                container.appendChild(charDiv);
+            });
+            
+            els.excludeList.appendChild(container);
+        }
+
+        function loadExcludedCharacters() {
+            const saved = localStorage.getItem('pinyin_excluded_chars');
+            if (saved) {
+                try {
+                    state.excludedCharacters = JSON.parse(saved);
+                } catch (e) {
+                    console.error('Error loading excluded characters:', e);
+                    state.excludedCharacters = [];
+                }
+            }
+            updateExcludeList();
+        }
+
+        // --- History Functions ---
+        function saveToHistory(inputText, outputText) {
+            if (!state.saveHistory) return;
+            
+            const historyItem = {
+                id: Date.now(),
+                timestamp: new Date().toLocaleString(),
+                input: inputText,
+                output: outputText,
+                format: state.format
+            };
+            
+            state.history.unshift(historyItem);
+            
+            // Keep only last 50 items
+            if (state.history.length > 50) {
+                state.history = state.history.slice(0, 50);
+            }
+            
+            localStorage.setItem('pinyin_history', JSON.stringify(state.history));
+            updateHistoryDisplay();
+        }
+
+        function loadHistory() {
+            const saved = localStorage.getItem('pinyin_history');
+            if (saved) {
+                state.history = JSON.parse(saved);
+            }
+            updateHistoryDisplay();
+        }
+
+        function updateHistoryDisplay() {
+            els.historyList.innerHTML = '';
+            
+            if (state.history.length === 0) {
+                els.emptyHistory.classList.remove('hidden');
+                return;
+            }
+            
+            els.emptyHistory.classList.add('hidden');
+            
+            state.history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'p-4 rounded-xl border border-stone-200 hover:border-stone-300 transition-colors bg-white';
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="text-xs text-stone-500 font-medium">${item.timestamp}</div>
+                        <button onclick="deleteHistoryItem(${item.id})" class="text-stone-400 hover:text-stone-600 p-1">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                        </button>
+                    </div>
+                    <div class="text-sm text-stone-600 mb-2 line-clamp-2">${item.input}</div>
+                    <div class="text-stone-800 font-serif mb-3 line-clamp-2">${item.output.substring(0, 100)}${item.output.length > 100 ? '...' : ''}</div>
+                    <button onclick="restoreHistoryItem(${item.id})" class="w-full py-2 text-sm border border-stone-300 text-stone-600 font-medium rounded-lg hover:bg-stone-50 transition-colors">
+                        Restore
+                    </button>
+                `;
+                els.historyList.appendChild(div);
+            });
+        }
+
+        function restoreHistoryItem(id) {
+            const item = state.history.find(h => h.id === id);
+            if (item) {
+                els.input.value = item.input;
+                processPinyin(item.input);
+                showToast('Translation restored');
+                toggleHistory();
+            }
+        }
+
+        function deleteHistoryItem(id) {
+            state.history = state.history.filter(h => h.id !== id);
+            localStorage.setItem('pinyin_history', JSON.stringify(state.history));
+            updateHistoryDisplay();
+        }
+
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear all history?')) {
+                state.history = [];
+                localStorage.removeItem('pinyin_history');
+                updateHistoryDisplay();
+                showToast('History cleared');
+            }
+        }
+
+        function toggleHistorySaving() {
+            state.saveHistory = els.saveHistoryToggle.checked;
+            localStorage.setItem('pinyin_save_history', state.saveHistory);
+        }
+
+        function toggleHistory() {
+            const isHidden = els.historyModal.classList.contains('hidden');
+            if (isHidden) {
+                els.historyModal.classList.remove('hidden');
+                setTimeout(() => {
+                    els.historyModal.classList.remove('opacity-0');
+                    els.historyPanel.classList.remove('translate-y-full');
+                }, 10);
+            } else {
+                els.historyModal.classList.add('opacity-0');
+                els.historyPanel.classList.add('translate-y-full');
+                setTimeout(() => {
+                    els.historyModal.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        // --- Input Animation ---
+        function setupInputAnimation() {
+            els.input.addEventListener('focus', () => {
+                els.inputContainer.classList.add('thin-border-animation');
+            });
+            
+            els.input.addEventListener('blur', () => {
+                els.inputContainer.classList.remove('thin-border-animation');
+            });
+        }
+
+        // --- Init ---
+        function init() {
+            // Load settings
+            const savedSize = localStorage.getItem('pinyin_size');
+            const savedColor = localStorage.getItem('pinyin_color');
+            const savedCharColor = localStorage.getItem('pinyin_character_color');
+            const savedFormat = localStorage.getItem('pinyin_format');
+            const savedSaveHistory = localStorage.getItem('pinyin_save_history');
+
+            if(savedSize) state.fontSize = savedSize;
+            if(savedColor) state.toneColor = savedColor;
+            if(savedCharColor) state.characterColor = savedCharColor;
+            if(savedFormat) state.format = savedFormat;
+            if(savedSaveHistory !== null) state.saveHistory = savedSaveHistory === 'true';
+
+            // Apply Settings UI state
+            setFontSize(state.fontSize, false);
+            setToneColor(state.toneColor, false);
+            setCharacterColor(state.characterColor, false);
+            els.saveHistoryToggle.checked = state.saveHistory;
+            
+            // Set Radio
+            Array.from(els.formatRadios).forEach(r => {
+                if(r.value === state.format) r.checked = true;
+            });
+
+            // Listen for CTRL+Enter
+            els.input.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') runConversion();
+            });
+
+            // Setup input animation
+            setupInputAnimation();
+
+            // Load history
+            loadHistory();
+            
+            // Load excluded characters
+            loadExcludedCharacters();
+        }
+
+        // --- Core Logic ---
+        function runConversion() {
+            const text = els.input.value.trim();
+            if (!text) {
+                showPlaceholder(true);
+                return;
+            }
+
+            // Store the original Chinese text for TTS
+            state.currentChineseText = text;
+
+            // Mobile Fix: Blur input to dismiss keyboard so user can see result
+            els.input.blur();
+
+            // Start Loading Animation
+            setLoading(true);
+
+            // Artificial delay for "App feel"
+            setTimeout(() => {
+                const result = processPinyin(text);
+                setLoading(false);
+                
+                // Store the output text for copying
+                if (result) {
+                    state.currentOutputText = result.copyText;
+                    
+                    // Enable the listen button
+                    els.listenButton.disabled = false;
+                    
+                    // Save to history
+                    saveToHistory(text, result.outputHtml);
+                }
+            }, 400); 
+        }
+
+        function processPinyin(text) {
+            let resultHtml = '';
+            let copyText = '';
+            const format = getSelectedFormat();
+
+            try {
+                const tokens = pinyin(text, { type: 'all', toneType: format.includes('num') ? 'num' : 'symbol' });
+
+                if (format === 'tone' || format === 'num') {
+                    // Entire output is pinyin
+                    const res = pinyin(text, { toneType: format === 'tone' ? 'symbol' : 'num', type: 'string' });
+                    resultHtml = `<span class="whitespace-pre-wrap pinyin-text">${res}</span>`;
+                    copyText = res;
+                } 
+                else if (format.includes('inline')) {
+                    // Hanzi (Pinyin) - Apply character color to Chinese characters
+                    // Check for excluded characters
+                    const resArr = tokens.map(t => {
+                        const char = t.origin || t.original || t.match; 
+                        if(t.isZh) {
+                            // Check if this character should be excluded from pinyin
+                            if (state.excludedCharacters.includes(char)) {
+                                // Show character without pinyin
+                                return `<span class="character-text">${char}</span>`;
+                            } else {
+                                // Show character with pinyin
+                                return `<span class="character-text">${char}</span>(<span class="pinyin-text">${t.pinyin}</span>)`;
+                            }
+                        }
+                        return char;
+                    });
+                    const resStr = resArr.join('');
+                    resultHtml = `<span class="whitespace-pre-wrap">${resStr}</span>`;
+                    
+                    // Re-generate plain text for copy buffer without HTML spans
+                    copyText = tokens.map(t => {
+                        const char = t.origin || t.original || t.match; 
+                        if(t.isZh) {
+                            // Check if this character should be excluded from pinyin
+                            if (state.excludedCharacters.includes(char)) {
+                                return char;
+                            } else {
+                                return `${char}(${t.pinyin})`;
+                            }
+                        }
+                        return char;
+                    }).join('');
+                }
+                else if (format.includes('ruby')) {
+                    // Ruby already uses <rt> which is styled by CSS
+                    // Apply character color to the Chinese characters
+                    // Check for excluded characters
+                    const htmlArr = tokens.map(t => {
+                        const char = t.origin || t.original || t.match;
+                        if(t.isZh) {
+                            // Check if this character should be excluded from pinyin
+                            if (state.excludedCharacters.includes(char)) {
+                                // Show character without pinyin (no ruby)
+                                return `<span class="character-text mx-[1px]">${char}</span>`;
+                            } else {
+                                // Show character with pinyin (ruby)
+                                return `<ruby><span class="character-text">${char}</span><rt>${t.pinyin}</rt></ruby>`;
+                            }
+                        }
+                        return `<span class="mx-[1px] whitespace-pre-wrap">${char}</span>`;
+                    });
+                    resultHtml = htmlArr.join('');
+                    copyText = tokens.map(t => {
+                         const char = t.origin || t.original || t.match;
+                         if(t.isZh) {
+                            // Check if this character should be excluded from pinyin
+                            if (state.excludedCharacters.includes(char)) {
+                                return char;
+                            } else {
+                                return `${char}(${t.pinyin})`;
+                            }
+                         }
+                         return char;
+                    }).join('');
+                }
+
+                els.output.innerHTML = resultHtml;
+                els.buffer.value = copyText;
+                showPlaceholder(false);
+                return { outputHtml: resultHtml, copyText };
+
+            } catch (e) {
+                console.error(e);
+                els.output.innerHTML = '<span class="text-red-500">Error. Try standard format.</span>';
+                showPlaceholder(false);
+                return null;
+            }
+        }
+
+        // --- UI Utilities ---
+
+        function setLoading(isLoading) {
+            if (isLoading) {
+                els.runIcon.classList.add('hidden');
+                els.spinner.classList.remove('hidden');
+                els.output.classList.add('opacity-50', 'blur-sm');
+            } else {
+                els.runIcon.classList.remove('hidden');
+                els.spinner.classList.add('hidden');
+                els.output.classList.remove('opacity-50', 'blur-sm');
+                // Trigger fade in
+                els.output.classList.remove('opacity-0');
+                els.output.classList.add('animate-fade-in');
+            }
+        }
+
+        function showPlaceholder(show) {
+            if (show) {
+                els.placeholder.classList.remove('hidden');
+                els.output.innerHTML = '';
+                els.output.classList.add('opacity-0');
+                // Disable listen button when no text
+                els.listenButton.disabled = true;
+            } else {
+                els.placeholder.classList.add('hidden');
+                els.output.classList.remove('opacity-0');
+            }
+        }
+
+        function clearInput() {
+            els.input.value = '';
+            els.input.focus();
+            showPlaceholder(true);
+            state.currentOutputText = '';
+            state.currentChineseText = '';
+            els.listenButton.disabled = true;
+        }
+
+        // --- Settings Logic ---
+
+        function toggleSettings() {
+            const isHidden = els.modal.classList.contains('hidden');
+            if (isHidden) {
+                els.modal.classList.remove('hidden');
+                // Trigger reflow for transition
+                void els.modal.offsetWidth; 
+                els.modal.classList.remove('opacity-0');
+                els.panel.classList.remove('translate-y-full');
+            } else {
+                els.modal.classList.add('opacity-0');
+                els.panel.classList.add('translate-y-full');
+                setTimeout(() => {
+                    els.modal.classList.add('hidden');
+                }, 300);
+            }
+        }
+
+        function saveSettings() {
+            state.format = getSelectedFormat();
+            localStorage.setItem('pinyin_format', state.format);
+            
+            // Re-run if there is text
+            if(els.input.value.trim()) {
+                const result = processPinyin(els.input.value.trim());
+                if (result) {
+                    state.currentOutputText = result.copyText;
+                }
+            }
+        }
+
+        function getSelectedFormat() {
+            for(const r of els.formatRadios) {
+                if(r.checked) return r.value;
+            }
+            return 'ruby-tone';
+        }
+
+        function setFontSize(sizeClass, save = true) {
+            // Remove old size classes
+            els.output.classList.remove('text-base', 'text-xl', 'text-3xl');
+            els.input.classList.remove('text-base', 'text-xl', 'text-3xl');
+            
+            // Add new
+            els.output.classList.add(sizeClass);
+            els.input.classList.add(sizeClass);
+            
+            // UI Feedback
+            ['size-sm', 'size-md', 'size-lg'].forEach(id => {
+               document.getElementById(id).classList.remove('bg-stone-800', 'text-white', 'border-stone-800');
+            });
+            const map = { 'text-base': 'size-sm', 'text-xl': 'size-md', 'text-3xl': 'size-lg' };
+            document.getElementById(map[sizeClass]).classList.add('bg-stone-800', 'text-white', 'border-stone-800');
+
+            if(save) {
+                state.fontSize = sizeClass;
+                localStorage.setItem('pinyin_size', sizeClass);
+            }
+        }
+
+        function setToneColor(color, save = true) {
+            document.documentElement.style.setProperty('--pinyin-color', color);
+            
+            // UI Feedback
+            ['color-orange', 'color-black', 'color-blue', 'color-green', 'color-purple', 'color-red', 'color-amber', 'color-pink'].forEach(id => {
+                document.getElementById(id).classList.remove('ring-stone-400');
+            });
+            
+            const map = { 
+                '#d97757': 'color-orange', 
+                '#292524': 'color-black', 
+                '#0ea5e9': 'color-blue',
+                '#10b981': 'color-green',
+                '#8b5cf6': 'color-purple',
+                '#ef4444': 'color-red',
+                '#f59e0b': 'color-amber',
+                '#ec4899': 'color-pink'
+            };
+            if(map[color]) document.getElementById(map[color]).classList.add('ring-stone-400');
+
+            if(save) {
+                state.toneColor = color;
+                localStorage.setItem('pinyin_color', color);
+                // Re-run conversion with new color
+                if(els.input.value.trim()) {
+                    const result = processPinyin(els.input.value.trim());
+                    if (result) {
+                        state.currentOutputText = result.copyText;
+                    }
+                }
+            }
+        }
+
+        function setCharacterColor(color, save = true) {
+            document.documentElement.style.setProperty('--character-color', color);
+            
+            // UI Feedback
+            ['char-black', 'char-orange', 'char-blue', 'char-green', 'char-purple', 'char-red', 'char-amber', 'char-gray'].forEach(id => {
+                document.getElementById(id).classList.remove('ring-stone-400');
+            });
+            
+            const map = { 
+                '#292524': 'char-black',
+                '#d97757': 'char-orange', 
+                '#0ea5e9': 'char-blue',
+                '#10b981': 'char-green',
+                '#8b5cf6': 'char-purple',
+                '#ef4444': 'char-red',
+                '#f59e0b': 'char-amber',
+                '#6b7280': 'char-gray'
+            };
+            if(map[color]) document.getElementById(map[color]).classList.add('ring-stone-400');
+
+            if(save) {
+                state.characterColor = color;
+                localStorage.setItem('pinyin_character_color', color);
+                // Re-run conversion with new color
+                if(els.input.value.trim()) {
+                    const result = processPinyin(els.input.value.trim());
+                    if (result) {
+                        state.currentOutputText = result.copyText;
+                    }
+                }
+            }
+        }
+
+        // --- Copy Logic ---
+        function copyOutput() {
+            const textToCopy = state.currentOutputText || els.buffer.value || els.output.innerText;
+            if (!els.input.value.trim()) return;
+
+            copyToClipboard(textToCopy).then(() => showToast('Copied to clipboard'))
+            .catch(() => {
+                // Fallback
+                els.buffer.select();
+                document.execCommand('copy');
+                showToast('Copied to clipboard');
+            });
+        }
+
+        function showToast(message) {
+            els.toastMessage.textContent = message;
+            els.toast.classList.remove('translate-y-[-20px]', 'opacity-0');
+            setTimeout(() => {
+                els.toast.classList.add('translate-y-[-20px]', 'opacity-0');
+            }, 2000);
+        }
+
+        // Initialize
+        init();
+
+    </script>
+</body>
+</html>
